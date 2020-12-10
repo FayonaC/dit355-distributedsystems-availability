@@ -12,4 +12,10 @@ public class ReceivedBooking {
         this.issuance = issuance;
         this.time = time;
     }
+
+    public ReceivedBooking(long userid, long requestid, String time) {
+        this.userid = userid;
+        this.requestid = requestid;
+        this.time = time;
+    }
 }
