@@ -110,10 +110,33 @@ public class Filter implements MqttCallback {
         for (int i = 0; i < bookings.size(); i++) {
             if ((requestBooking.dentistid == bookings.get(i).getDentistid()) && (requestBooking.time != bookings.get(i).getTime())) {
                 // MAKE BOOKING
-            } // else if # dentists > # bookings of same dentist and same date&time .... MAKE BOOKING
-            // else ... NOPE! send rejection
-        }
 
+            } else if ((requestBooking.dentistid == bookings.get(i).getDentistid()) && (requestBooking.time == bookings.get(i).getTime())) {
+                //  # dentists > # bookings of same dentist and same date&time .... MAKE BOOKING
+                //check first how mangy bookings exist at the location at the desired time (loop) and then after that compare to # of dentists at the location
+                long sameSlot = 0;
+                for (int j = 0; j < bookings.size(); j++) {
+
+                    if ((requestBooking.dentistid == bookings.get(j).getDentistid()) && (requestBooking.time == bookings.get(j).getTime())) {
+                        sameSlot = sameSlot + 1;
+                    }
+                }
+                long workingDentists = 0;
+                for (int k = 0; k < dentists.size(); k++) {
+                    if (requestBooking.dentistid == dentists.get(k).getId()) {
+                        workingDentists = dentists.get(k).getDentistNumber();
+                    }
+                }
+
+                if (workingDentists > sameSlot) {
+                    //make booking
+                }
+
+            } else {
+                //NOPE! send rejection
+            }
+
+        }
     }
 
     public Dentist makeDentist(MqttMessage message) throws Exception {
