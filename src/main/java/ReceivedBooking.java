@@ -18,4 +18,14 @@ public class ReceivedBooking {
         this.requestid = requestid;
         this.time = time;
     }
+
+    public String toString() {
+        return "\n{\n" +
+                "\"userid\": " + userid +
+                ",\n\"requestid\": " + requestid +
+                ",\n\"dentistid\": " + dentistid +
+                ",\n\"issuance\": " + issuance +
+                ",\n\"time\": \"" + time + "\"" +
+                "\n}\n";
+    }
 }

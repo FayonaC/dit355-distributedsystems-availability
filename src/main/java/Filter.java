@@ -27,7 +27,7 @@ public class Filter implements MqttCallback {
 
     public static void main(String[] args) throws MqttException, InterruptedException {
         Filter s = new Filter("test-filter", "tcp://localhost:1883");
-        s.subscribeToMessages("BookingResponse");
+        s.subscribeToMessages("BookingRegistry");
         s.subscribeToMessages("BookingRequest");
         s.subscribeToMessages("Dentists");
     }
@@ -80,14 +80,29 @@ public class Filter implements MqttCallback {
         ArrayList receivedDentistRegistry = null;
         ArrayList receivedBookingRegistry = null;
         ReceivedBooking receivedBooking = null;
-        if (topic == "BookingRequest") { // Request json from frontend
+        System.out.println("MESSAGE RECEIVED");
+        String sinkTopic = extractTopic(incoming);
+        //receivedBooking = makeReceivedBooking(incoming); // We take in the booking request from the frontend and
+        // create a new received booking item with certain fields
+        // System.out.println(receivedBooking);
+        //checkAvailability1(receivedBooking);
+
+
+        //if (sinkTopic == "BookingRequest") { // Request json from frontend
+            System.out.println("Starting to check..");
             receivedBooking = makeReceivedBooking(incoming); // We take in the booking request from the frontend and
             // create a new received booking item with certain fields
-        } else if (topic == "BookingRegistry") { // Booking json from Booking component
+            System.out.println("BOOKING REQ RECEIVED");
+
+        //} else if (sinkTopic == "BookingRegistry") { // Booking json from Booking component
             receivedBookingRegistry = makeBookingArray((incoming));
-        } else if (topic == "Dentists") { // Dentists json from Dentists component
-            receivedDentistRegistry = makeDentistArray(incoming);
-        }
+            System.out.println("BOOKING REG DONE");
+
+        //} else if (sinkTopic == "Dentists") { // Dentists json from Dentists component
+        receivedDentistRegistry = makeDentistArray(incoming);
+        System.out.println("DENTIST REG DONE");
+
+
         checkAvailability(receivedBooking, receivedBookingRegistry, receivedDentistRegistry);
     }
 
@@ -100,6 +115,7 @@ public class Filter implements MqttCallback {
         outgoing.setPayload(receivedBooking.toString().getBytes());
         middleware.publish(sinkTopic, outgoing);
     }
+
 
     public void checkAvailability(ReceivedBooking requestBooking, ArrayList<Dentist> dentists,
                                   ArrayList<Booking> bookings) throws MqttException {
@@ -158,17 +174,43 @@ public class Filter implements MqttCallback {
     }
 
     public ArrayList makeDentistArray(MqttMessage message) throws Exception {
+        System.out.println("I am in dentist making mode");
         JSONParser jsonParser = new JSONParser();
-        Object jsonObject = jsonParser.parse(message.toString());
-        JSONObject parser = (JSONObject) jsonObject;
+        System.out.println("I am in dentist making mode2");
+        JSONObject dentistObj = (JSONObject) jsonParser.parse((message.toString()));
 
-        long id = (Long) parser.get("id");
-        long dentistNumber = (Long) parser.get("dentistNumber");
+       // Object jsonObject = jsonParser.parse(message.toString());
+        System.out.println("I am in dentist making mode3");
+
+      //  JSONObject dentistObj = (JSONObject) jsonObject;
+        System.out.println("I am in dentist making mode4");
+
+        // Able to create a JSON object from the message but cannot get info from fields
+        long id = (Long) dentistObj.get("id");
+        String dentistName = (String) dentistObj.get("name");
+        String owner = (String) dentistObj.get("owner");
+        long dentistNumber = (Long) dentistObj.get("dentists");
+        String address = (String) dentistObj.get("address");
+        String city = (String) dentistObj.get("city");
+
+
+        JSONObject coordinateObj = (JSONObject) dentistObj.get("coordinate");
+        JSONObject openinghoursObj = (JSONObject) dentistObj.get("openinghours");
+
+        double latitude = (Double) coordinateObj.get("latitude");
+        double longitude = (Double) coordinateObj.get("longitude");
+        String monday = (String) openinghoursObj.get("monday");
+        String tuesday = (String) openinghoursObj.get("tuesday");
+        String wednesday = (String) openinghoursObj.get("wednesday");
+        String thursday = (String) openinghoursObj.get("thursday");
+        String friday = (String) openinghoursObj.get("friday");
 
         // Creating a booking object using the fields from the parsed JSON
-        Dentist newDentist = new Dentist(id, dentistNumber);
         ArrayList<Dentist> DentistsRegistry = new ArrayList<>();
-        DentistsRegistry.add(newDentist);
+
+       DentistsRegistry.add(new Dentist(id, dentistName, owner, dentistNumber, address, city,
+                latitude, longitude, monday, tuesday, wednesday, thursday,
+                friday));
 
         return DentistsRegistry;
     }
