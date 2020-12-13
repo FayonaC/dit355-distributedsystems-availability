@@ -87,23 +87,32 @@ public class Filter implements MqttCallback {
         // System.out.println(receivedBooking);
         //checkAvailability1(receivedBooking);
 
+        System.out.println("Starting to check..");
 
-        //if (sinkTopic == "BookingRequest") { // Request json from frontend
-            System.out.println("Starting to check..");
+        if (topic.equals("BookingRequest")) { // Request json from frontend
+            System.out.println("Found booking request");
+
             receivedBooking = makeReceivedBooking(incoming); // We take in the booking request from the frontend and
             // create a new received booking item with certain fields
-            System.out.println("BOOKING REQ RECEIVED");
+            System.out.println("BOOKING REQ DONE in messageArrived");
 
-        //} else if (sinkTopic == "BookingRegistry") { // Booking json from Booking component
+        } else if (topic.equals("BookingRegistry")) { // Booking json from Booking component
+            System.out.println("Found booking registry");
+
             receivedBookingRegistry = makeBookingArray((incoming));
-            System.out.println("BOOKING REG DONE");
+            System.out.println("BOOKING REG DONE in messageArrived");
 
-        //} else if (sinkTopic == "Dentists") { // Dentists json from Dentists component
-        receivedDentistRegistry = makeDentistArray(incoming);
-        System.out.println("DENTIST REG DONE");
+        } else if (topic.equals("Dentists")) { // Dentists json from Dentists component
+            System.out.println("Found dentist request");
 
+            receivedDentistRegistry = makeDentistArray(incoming);
+            System.out.println("DENTIST REG DONE in messageArrived");
+        }
+        System.out.println("All info acquired, checking availability...");
 
         checkAvailability(receivedBooking, receivedBookingRegistry, receivedDentistRegistry);
+
+        System.out.println("Availability check finished");
     }
 
     private String extractTopic(MqttMessage incoming) {
@@ -129,6 +138,8 @@ public class Filter implements MqttCallback {
 
             // if the requested dentist office has the request timeslot available, make the booking
             if ((requestBooking.dentistid == bookings.get(i).getDentistid()) && (requestBooking.time != bookings.get(i).getTime())) {
+
+            //** NOTE: sinkTopic and topic are different, these will likely need to be changed in all dump parameters
 
                 // make booking, publish information to Booking component
                 ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.userid, requestBooking.requestid, requestBooking.dentistid, requestBooking.issuance, requestBooking.time);
@@ -212,6 +223,9 @@ public class Filter implements MqttCallback {
                 latitude, longitude, monday, tuesday, wednesday, thursday,
                 friday));
 
+        System.out.println("Dentist registry created");
+
+
         return DentistsRegistry;
     }
 
@@ -219,6 +233,9 @@ public class Filter implements MqttCallback {
         JSONParser jsonParser = new JSONParser();
         Object jsonObject = jsonParser.parse(message.toString());
         JSONObject parser = (JSONObject) jsonObject;
+
+        System.out.println("Making booking from acquired fields..");
+
 
         long userid = (Long) parser.get("userid");
         long requestid = (Long) parser.get("requestid");
@@ -231,6 +248,12 @@ public class Filter implements MqttCallback {
 
         ArrayList<Booking> BookingsRegistry = new ArrayList<>();
         BookingsRegistry.add(newBooking);
+
+        System.out.println("Booking Registry created: ");
+            for (Object booking : BookingsRegistry) {
+                System.out.println(booking.toString());
+
+        };
 
         return BookingsRegistry;
     }
@@ -250,6 +273,8 @@ public class Filter implements MqttCallback {
 
         // Creating a booking object using the fields from the parsed JSON
         ReceivedBooking newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
+
+        System.out.println("New booking request created: " + newBooking);
         return newBooking;
     }
     // This method takes in the incoming MqttMessage and parses it, creating a new ConfirmedBooking object with filtered
