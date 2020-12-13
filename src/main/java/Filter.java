@@ -1,4 +1,6 @@
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -10,6 +12,7 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 import org.eclipse.paho.client.mqttv3.MqttSecurityException;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
@@ -77,11 +80,10 @@ public class Filter implements MqttCallback {
      */
     @Override
     public void messageArrived(String topic, MqttMessage incoming) throws Exception {
-        ArrayList receivedDentistRegistry = null;
-        ArrayList receivedBookingRegistry = null;
+        ArrayList receivedDentistRegistry = new ArrayList();
+        ArrayList receivedBookingRegistry = new ArrayList();
         ReceivedBooking receivedBooking = null;
         System.out.println("MESSAGE RECEIVED");
-        String sinkTopic = extractTopic(incoming);
         //receivedBooking = makeReceivedBooking(incoming); // We take in the booking request from the frontend and
         // create a new received booking item with certain fields
         // System.out.println(receivedBooking);
@@ -166,6 +168,7 @@ public class Filter implements MqttCallback {
                    // make booking, publish information to Booking component
                     ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.userid, requestBooking.requestid, requestBooking.dentistid, requestBooking.issuance, requestBooking.time);
                     dump(AcceptedBooking, "SuccessfulBooking");
+
                 } else {
                     // reject booking, send rejection back to user
                     ReceivedBooking rejectedBooking = new ReceivedBooking(requestBooking.userid, requestBooking.requestid, "none");
@@ -185,28 +188,33 @@ public class Filter implements MqttCallback {
     }
 
     public ArrayList makeDentistArray(MqttMessage message) throws Exception {
-        System.out.println("I am in dentist making mode");
         JSONParser jsonParser = new JSONParser();
-        System.out.println("I am in dentist making mode2");
-        JSONObject dentistObj = (JSONObject) jsonParser.parse((message.toString()));
+        Object jsonObject = jsonParser.parse(message.toString());
+        JSONObject dentistObj = (JSONObject) jsonObject;
+        JSONArray dentistsJSON = (JSONArray) dentistObj.get("dentists");
 
-       // Object jsonObject = jsonParser.parse(message.toString());
-        System.out.println("I am in dentist making mode3");
+        ArrayList<Dentist> DentistsRegistry = new ArrayList<>();
 
-      //  JSONObject dentistObj = (JSONObject) jsonObject;
+        for (Object dentist : dentistsJSON) {
+
+            System.out.println(dentistsJSON);
+            System.out.println("Trying to create dentist objects..");
+
+            JSONObject dObj = (JSONObject) dentist;
+
+        //  JSONObject dentistObj = (JSONObject) jsonObject;
         System.out.println("I am in dentist making mode4");
 
         // Able to create a JSON object from the message but cannot get info from fields
-        long id = (Long) dentistObj.get("id");
-        String dentistName = (String) dentistObj.get("name");
-        String owner = (String) dentistObj.get("owner");
-        long dentistNumber = (Long) dentistObj.get("dentists");
-        String address = (String) dentistObj.get("address");
-        String city = (String) dentistObj.get("city");
+        long id = (Long) dObj.get("id");
+        String dentistName = (String) dObj.get("name");
+        String owner = (String) dObj.get("owner");
+        long dentistNumber = (Long) dObj.get("dentists");
+        String address = (String) dObj.get("address");
+        String city = (String) dObj.get("city");
 
-
-        JSONObject coordinateObj = (JSONObject) dentistObj.get("coordinate");
-        JSONObject openinghoursObj = (JSONObject) dentistObj.get("openinghours");
+        JSONObject coordinateObj = (JSONObject) dObj.get("coordinate");
+        JSONObject openinghoursObj = (JSONObject) dObj.get("openinghours");
 
         double latitude = (Double) coordinateObj.get("latitude");
         double longitude = (Double) coordinateObj.get("longitude");
@@ -216,44 +224,55 @@ public class Filter implements MqttCallback {
         String thursday = (String) openinghoursObj.get("thursday");
         String friday = (String) openinghoursObj.get("friday");
 
-        // Creating a booking object using the fields from the parsed JSON
-        ArrayList<Dentist> DentistsRegistry = new ArrayList<>();
+        System.out.println("Got the stuff!");
+        // Adding dentist objects created from using the fields from the parsed JSON to arraylist
 
-       DentistsRegistry.add(new Dentist(id, dentistName, owner, dentistNumber, address, city,
-                latitude, longitude, monday, tuesday, wednesday, thursday,
-                friday));
+        Dentist newDentist = new Dentist(id, dentistName, owner, dentistNumber, address, city,
+              latitude, longitude, monday, tuesday, wednesday, thursday,
+              friday);
+
+        DentistsRegistry.add(newDentist);
+
+        }
 
         System.out.println("Dentist registry created");
-
 
         return DentistsRegistry;
     }
 
     public ArrayList makeBookingArray(MqttMessage message) throws Exception {
+        ArrayList<Booking> BookingsRegistry = new ArrayList<>();
         JSONParser jsonParser = new JSONParser();
         Object jsonObject = jsonParser.parse(message.toString());
-        JSONObject parser = (JSONObject) jsonObject;
+        JSONObject bookingObj = (JSONObject) jsonObject;
 
-        System.out.println("Making booking from acquired fields..");
+        List<String> bookingReg = Arrays.asList(message.toString()); //dentistReg prints the reg in proper form
+        JSONArray bReg = new JSONArray(); //deReg prints the toString
+        bReg.addAll(bookingReg);
 
 
-        long userid = (Long) parser.get("userid");
-        long requestid = (Long) parser.get("requestid");
-        long dentistid = (Long) parser.get("dentistid");
-        long issuance = (Long) parser.get("issuance");
-        String time = (String) parser.get("time");
+        for (Object booking : bReg) {
+            System.out.println("Iterate through.." + message.toString());
+
+            bookingObj = (JSONObject) booking;
+
+            System.out.println("trying to make a booking obj");
+
+
+        long userid = (Long) bookingObj.get("userid");
+        long requestid = (Long) bookingObj.get("requestid");
+        long dentistid = (Long) bookingObj.get("dentistid");
+        long issuance = (Long) bookingObj.get("issuance");
+        String time = (String) bookingObj.get("time");
 
         // Creating a booking object using the fields from the parsed JSON
         Booking newBooking = new Booking(userid, requestid, dentistid, issuance, time);
 
-        ArrayList<Booking> BookingsRegistry = new ArrayList<>();
         BookingsRegistry.add(newBooking);
 
-        System.out.println("Booking Registry created: ");
-            for (Object booking : BookingsRegistry) {
-                System.out.println(booking.toString());
+        }
+        System.out.println("Booking Registry created");
 
-        };
 
         return BookingsRegistry;
     }
