@@ -193,88 +193,82 @@ public class Filter implements MqttCallback {
         JSONObject dentistObj = (JSONObject) jsonObject;
         JSONArray dentistsJSON = (JSONArray) dentistObj.get("dentists");
 
-        ArrayList<Dentist> DentistsRegistry = new ArrayList<>();
+        ArrayList<Dentist> dentistsRegistry = new ArrayList<>();
 
         for (Object dentist : dentistsJSON) {
 
-            System.out.println(dentistsJSON);
             System.out.println("Trying to create dentist objects..");
 
             JSONObject dObj = (JSONObject) dentist;
 
-        //  JSONObject dentistObj = (JSONObject) jsonObject;
-        System.out.println("I am in dentist making mode4");
+            //  JSONObject dentistObj = (JSONObject) jsonObject;
 
-        // Able to create a JSON object from the message but cannot get info from fields
-        long id = (Long) dObj.get("id");
-        String dentistName = (String) dObj.get("name");
-        String owner = (String) dObj.get("owner");
-        long dentistNumber = (Long) dObj.get("dentists");
-        String address = (String) dObj.get("address");
-        String city = (String) dObj.get("city");
 
-        JSONObject coordinateObj = (JSONObject) dObj.get("coordinate");
-        JSONObject openinghoursObj = (JSONObject) dObj.get("openinghours");
+            // Able to create a JSON object from the message but cannot get info from fields
+            long id = (Long) dObj.get("id");
+            String dentistName = (String) dObj.get("name");
+            String owner = (String) dObj.get("owner");
+            long dentistNumber = (Long) dObj.get("dentists");
+            String address = (String) dObj.get("address");
+            String city = (String) dObj.get("city");
+            System.out.println("I am in dentist making mode4");
+            JSONObject coordinateObj = (JSONObject) dObj.get("coordinate");
+            JSONObject openinghoursObj = (JSONObject) dObj.get("openinghours");
 
-        double latitude = (Double) coordinateObj.get("latitude");
-        double longitude = (Double) coordinateObj.get("longitude");
-        String monday = (String) openinghoursObj.get("monday");
-        String tuesday = (String) openinghoursObj.get("tuesday");
-        String wednesday = (String) openinghoursObj.get("wednesday");
-        String thursday = (String) openinghoursObj.get("thursday");
-        String friday = (String) openinghoursObj.get("friday");
+            double latitude = (Double) coordinateObj.get("latitude");
+            double longitude = (Double) coordinateObj.get("longitude");
+            String monday = (String) openinghoursObj.get("monday");
+            String tuesday = (String) openinghoursObj.get("tuesday");
+            String wednesday = (String) openinghoursObj.get("wednesday");
+            String thursday = (String) openinghoursObj.get("thursday");
+            String friday = (String) openinghoursObj.get("friday");
 
-        System.out.println("Got the stuff!");
-        // Adding dentist objects created from using the fields from the parsed JSON to arraylist
+            System.out.println("Got the stuff!");
+            // Adding dentist objects created from using the fields from the parsed JSON to arraylist
 
-        Dentist newDentist = new Dentist(id, dentistName, owner, dentistNumber, address, city,
-              latitude, longitude, monday, tuesday, wednesday, thursday,
-              friday);
+            Dentist newDentist = new Dentist(id, dentistName, owner, dentistNumber, address, city,
+                    latitude, longitude, monday, tuesday, wednesday, thursday,
+                    friday);
 
-        DentistsRegistry.add(newDentist);
+            dentistsRegistry.add(newDentist);
 
         }
 
         System.out.println("Dentist registry created");
 
-        return DentistsRegistry;
+        return dentistsRegistry;
     }
 
     public ArrayList makeBookingArray(MqttMessage message) throws Exception {
-        ArrayList<Booking> BookingsRegistry = new ArrayList<>();
         JSONParser jsonParser = new JSONParser();
         Object jsonObject = jsonParser.parse(message.toString());
         JSONObject bookingObj = (JSONObject) jsonObject;
+        JSONArray bookingsJSON = (JSONArray) bookingObj.get("bookings");
 
-        List<String> bookingReg = Arrays.asList(message.toString()); //dentistReg prints the reg in proper form
-        JSONArray bReg = new JSONArray(); //deReg prints the toString
-        bReg.addAll(bookingReg);
+        ArrayList<Booking> bookingsRegistry = new ArrayList<>();
 
+        for (Object booking : bookingsJSON) {
 
-        for (Object booking : bReg) {
-            System.out.println("Iterate through.." + message.toString());
+            System.out.println("Trying to create booking objects..");
 
-            bookingObj = (JSONObject) booking;
+            JSONObject bObj = (JSONObject) booking;
 
-            System.out.println("trying to make a booking obj");
+            long userid = (Long) bObj.get("userid");
+            long requestid = (Long) bObj.get("requestid");
+            long dentistid = (Long) bObj.get("dentistid");
+            long issuance = (Long) bObj.get("issuance");
+            String time = (String) bObj.get("time");
 
+            // Creating a booking object using the fields from the parsed JSON
+            Booking newBooking = new Booking(userid, requestid, dentistid, issuance, time);
 
-        long userid = (Long) bookingObj.get("userid");
-        long requestid = (Long) bookingObj.get("requestid");
-        long dentistid = (Long) bookingObj.get("dentistid");
-        long issuance = (Long) bookingObj.get("issuance");
-        String time = (String) bookingObj.get("time");
-
-        // Creating a booking object using the fields from the parsed JSON
-        Booking newBooking = new Booking(userid, requestid, dentistid, issuance, time);
-
-        BookingsRegistry.add(newBooking);
+            bookingsRegistry.add(newBooking);
 
         }
         System.out.println("Booking Registry created");
 
 
-        return BookingsRegistry;
+        return bookingsRegistry;
     }
 
 
