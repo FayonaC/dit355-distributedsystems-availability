@@ -18,6 +18,9 @@ import org.json.simple.parser.JSONParser;
 
 public class Filter implements MqttCallback {
 
+    ArrayList receivedBookingRegistry;
+    ArrayList receivedDentistRegistry;
+
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
     private final IMqttClient middleware;
@@ -80,8 +83,7 @@ public class Filter implements MqttCallback {
      */
     @Override
     public void messageArrived(String topic, MqttMessage incoming) throws Exception {
-        ArrayList receivedDentistRegistry = new ArrayList();
-        ArrayList receivedBookingRegistry = new ArrayList();
+
         ReceivedBooking receivedBooking = null;
         System.out.println("MESSAGE RECEIVED");
         //receivedBooking = makeReceivedBooking(incoming); // We take in the booking request from the frontend and
@@ -91,18 +93,51 @@ public class Filter implements MqttCallback {
 
         System.out.println("Starting to check..");
 
-        if (topic.equals("BookingRequest")) { // Request json from frontend
+        // String sinkTopic = extractTopic(incoming);
+
+        switch (topic)
+        {
+            case "BookingRequest":
+
+                System.out.println("Found booking request");
+                receivedBooking = makeReceivedBooking(incoming);
+                System.out.println("Line 101 " + receivedBooking);
+                break;
+            case "BookingRegistry":
+                System.out.println("Found booking registry");
+                receivedBookingRegistry = makeBookingArray((incoming));
+                System.out.println("BOOKING REG DONE in messageArrived");
+                System.out.println("Line 107 " + receivedBookingRegistry);
+                break;
+            case "Dentists":
+                System.out.println("Found dentist request");
+                receivedDentistRegistry = makeDentistArray(incoming);
+                System.out.println("DENTIST REG DONE in messageArrived");
+                System.out.println("Line 113 " + receivedDentistRegistry);
+                break;
+            default:
+                System.out.println("Topic not found");
+        }
+
+        ReceivedBooking demandedBooking = receivedBooking;
+        System.out.println("Line 120 " + demandedBooking);
+        ArrayList<Dentist> dentistList = receivedDentistRegistry;
+        System.out.println("Line 122 " + dentistList);
+        ArrayList<Booking> bookingList = receivedBookingRegistry;
+        System.out.println("Line 124 " + bookingList);
+
+       /** if (topic.equals("BookingRequest")) { // Request json from frontend
             System.out.println("Found booking request");
 
             receivedBooking = makeReceivedBooking(incoming); // We take in the booking request from the frontend and
             // create a new received booking item with certain fields
             System.out.println("BOOKING REQ DONE in messageArrived");
-
         } else if (topic.equals("BookingRegistry")) { // Booking json from Booking component
             System.out.println("Found booking registry");
 
             receivedBookingRegistry = makeBookingArray((incoming));
             System.out.println("BOOKING REG DONE in messageArrived");
+            System.out.println(receivedBookingRegistry);
 
         } else if (topic.equals("Dentists")) { // Dentists json from Dentists component
             System.out.println("Found dentist request");
@@ -110,11 +145,19 @@ public class Filter implements MqttCallback {
             receivedDentistRegistry = makeDentistArray(incoming);
             System.out.println("DENTIST REG DONE in messageArrived");
         }
+        */
         System.out.println("All info acquired, checking availability...");
 
-        checkAvailability(receivedBooking, receivedBookingRegistry, receivedDentistRegistry);
+        if (receivedBooking != null) {
+            checkAvailability(demandedBooking, dentistList, bookingList);
+            System.out.println("Availability check finished");
+            System.out.println(receivedDentistRegistry);
+            System.out.println(receivedBookingRegistry);
+        } else {
+            System.out.println("MORE INFO NEEEEEEDED! D:");
+        }
 
-        System.out.println("Availability check finished");
+
     }
 
     private String extractTopic(MqttMessage incoming) {
@@ -135,11 +178,12 @@ public class Filter implements MqttCallback {
         // if requestBooking.dentistid == bookings.dentistid AND resp.time!=bookings.time then booking OK
         // if requestBooking.dentistid == bookings.dentistid AND resp.time==bookings.time, then check dentists.dentists number
         // if dentists.dentists number > number of copies of bookings.dentistid + bookings.time then booking OK
-
+        System.out.println("checkAvailability method starts running here");
         for (int i = 0; i < bookings.size(); i++) {
-
+            System.out.println("This is the info we want, yay!" + bookings.get(i).getTime());
+            System.out.println("This is the booking request info " + requestBooking);
             // if the requested dentist office has the request timeslot available, make the booking
-            if ((requestBooking.dentistid == bookings.get(i).getDentistid()) && (requestBooking.time != bookings.get(i).getTime())) {
+            if ((requestBooking.dentistid == bookings.get(i).getDentistid()) && (!requestBooking.time.equals(bookings.get(i).getTime()))) {
 
             //** NOTE: sinkTopic and topic are different, these will likely need to be changed in all dump parameters
 
@@ -148,12 +192,12 @@ public class Filter implements MqttCallback {
                 dump(AcceptedBooking, "SuccessfulBooking");
 
                 // if there is already an appointment in requested slot, check if there are other available dentists
-            } else if ((requestBooking.dentistid == bookings.get(i).getDentistid()) && (requestBooking.time == bookings.get(i).getTime())) {
+            } if ((requestBooking.dentistid == bookings.get(i).getDentistid()) && (requestBooking.time.equals(bookings.get(i).getTime()))) {
 
                 long sameSlot = 0;
                 for (int j = 0; j < bookings.size(); j++) {
 
-                    if ((requestBooking.dentistid == bookings.get(j).getDentistid()) && (requestBooking.time == bookings.get(j).getTime())) {
+                    if ((requestBooking.dentistid == bookings.get(j).getDentistid()) && (requestBooking.time.equals(bookings.get(j).getTime()))) {
                         sameSlot = sameSlot + 1;
                     }
                 }
@@ -185,6 +229,7 @@ public class Filter implements MqttCallback {
             }
 
         }
+        System.out.println("Finished the for-loop");
     }
 
     public ArrayList makeDentistArray(MqttMessage message) throws Exception {
@@ -197,12 +242,7 @@ public class Filter implements MqttCallback {
 
         for (Object dentist : dentistsJSON) {
 
-            System.out.println("Trying to create dentist objects..");
-
             JSONObject dObj = (JSONObject) dentist;
-
-            //  JSONObject dentistObj = (JSONObject) jsonObject;
-
 
             // Able to create a JSON object from the message but cannot get info from fields
             long id = (Long) dObj.get("id");
@@ -211,7 +251,7 @@ public class Filter implements MqttCallback {
             long dentistNumber = (Long) dObj.get("dentists");
             String address = (String) dObj.get("address");
             String city = (String) dObj.get("city");
-            System.out.println("I am in dentist making mode4");
+
             JSONObject coordinateObj = (JSONObject) dObj.get("coordinate");
             JSONObject openinghoursObj = (JSONObject) dObj.get("openinghours");
 
@@ -223,7 +263,6 @@ public class Filter implements MqttCallback {
             String thursday = (String) openinghoursObj.get("thursday");
             String friday = (String) openinghoursObj.get("friday");
 
-            System.out.println("Got the stuff!");
             // Adding dentist objects created from using the fields from the parsed JSON to arraylist
 
             Dentist newDentist = new Dentist(id, dentistName, owner, dentistNumber, address, city,
@@ -233,8 +272,6 @@ public class Filter implements MqttCallback {
             dentistsRegistry.add(newDentist);
 
         }
-
-        System.out.println("Dentist registry created");
 
         return dentistsRegistry;
     }
@@ -248,8 +285,6 @@ public class Filter implements MqttCallback {
         ArrayList<Booking> bookingsRegistry = new ArrayList<>();
 
         for (Object booking : bookingsJSON) {
-
-            System.out.println("Trying to create booking objects..");
 
             JSONObject bObj = (JSONObject) booking;
 
@@ -265,8 +300,6 @@ public class Filter implements MqttCallback {
             bookingsRegistry.add(newBooking);
 
         }
-        System.out.println("Booking Registry created");
-
 
         return bookingsRegistry;
     }
@@ -287,7 +320,6 @@ public class Filter implements MqttCallback {
         // Creating a booking object using the fields from the parsed JSON
         ReceivedBooking newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
 
-        System.out.println("New booking request created: " + newBooking);
         return newBooking;
     }
     // This method takes in the incoming MqttMessage and parses it, creating a new ConfirmedBooking object with filtered

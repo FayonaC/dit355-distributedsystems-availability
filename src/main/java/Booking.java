@@ -55,4 +55,5 @@ public class Booking {
     public void setTime(String time) {
         this.time = time;
     }
+
 }
