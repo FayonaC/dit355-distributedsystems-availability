@@ -36,6 +36,7 @@ public class Filter implements MqttCallback {
         s.subscribeToMessages("BookingRegistry");
         s.subscribeToMessages("BookingRequest");
         s.subscribeToMessages("Dentists");
+        s.subscribeToMessages("AvailabilityRequest");
     }
 
     private void subscribeToMessages(String sourceTopic) {
