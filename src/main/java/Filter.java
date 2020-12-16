@@ -102,58 +102,25 @@ public class Filter implements MqttCallback {
 
                 System.out.println("Found booking request");
                 receivedBooking = makeReceivedBooking(incoming);
-                System.out.println("Line 101 " + receivedBooking);
                 break;
             case "BookingRegistry":
                 System.out.println("Found booking registry");
                 receivedBookingRegistry = makeBookingArray((incoming));
                 System.out.println("BOOKING REG DONE in messageArrived");
-                System.out.println("Line 107 " + receivedBookingRegistry);
                 break;
             case "Dentists":
                 System.out.println("Found dentist request");
                 receivedDentistRegistry = makeDentistArray(incoming);
                 System.out.println("DENTIST REG DONE in messageArrived");
-                System.out.println("Line 113 " + receivedDentistRegistry);
                 break;
             default:
                 System.out.println("Topic not found");
         }
 
-        ReceivedBooking demandedBooking = receivedBooking;
-        System.out.println("Line 120 " + demandedBooking);
-        ArrayList<Dentist> dentistList = receivedDentistRegistry;
-        System.out.println("Line 122 " + dentistList);
-        ArrayList<Booking> bookingList = receivedBookingRegistry;
-        System.out.println("Line 124 " + bookingList);
-
-       /** if (topic.equals("BookingRequest")) { // Request json from frontend
-            System.out.println("Found booking request");
-
-            receivedBooking = makeReceivedBooking(incoming); // We take in the booking request from the frontend and
-            // create a new received booking item with certain fields
-            System.out.println("BOOKING REQ DONE in messageArrived");
-        } else if (topic.equals("BookingRegistry")) { // Booking json from Booking component
-            System.out.println("Found booking registry");
-
-            receivedBookingRegistry = makeBookingArray((incoming));
-            System.out.println("BOOKING REG DONE in messageArrived");
-            System.out.println(receivedBookingRegistry);
-
-        } else if (topic.equals("Dentists")) { // Dentists json from Dentists component
-            System.out.println("Found dentist request");
-
-            receivedDentistRegistry = makeDentistArray(incoming);
-            System.out.println("DENTIST REG DONE in messageArrived");
-        }
-        */
-        System.out.println("All info acquired, checking availability...");
-
         if (receivedBooking != null) {
-            checkAvailability(demandedBooking, dentistList, bookingList);
+            System.out.println("All info acquired, checking availability...");
+            checkAvailability(receivedBooking, receivedDentistRegistry, receivedBookingRegistry);
             System.out.println("Availability check finished");
-            System.out.println(receivedDentistRegistry);
-            System.out.println(receivedBookingRegistry);
         } else {
             System.out.println("MORE INFO NEEEEEEDED! D:");
         }
@@ -171,15 +138,103 @@ public class Filter implements MqttCallback {
         middleware.publish(sinkTopic, outgoing);
     }
 
+    // If booking(i).dentistID is the same as requestBooking.dentistID, add to ArrayList of bookings from the same dentist
 
-    public void checkAvailability(ReceivedBooking requestBooking, ArrayList<Dentist> dentists,
-                                  ArrayList<Booking> bookings) throws MqttException {
-        // Needs to take in data from Dentist, Booking and booking response from Frontend and check them
-        // Uses dentist id from booking response, iterates through dentist array for matching dentist id
-        // if requestBooking.dentistid == bookings.dentistid AND resp.time!=bookings.time then booking OK
-        // if requestBooking.dentistid == bookings.dentistid AND resp.time==bookings.time, then check dentists.dentists number
-        // if dentists.dentists number > number of copies of bookings.dentistid + bookings.time then booking OK
-        System.out.println("checkAvailability method starts running here");
+    public ArrayList checkDentistBookings(ReceivedBooking requestBooking, ArrayList<Booking> bookings) {
+        ArrayList<Booking> requestedDentistConfirmedBookings = null;
+        for (int i = 0; i < bookings.size(); i++) {
+            // if the requested dentist office has the request timeslot available, make the booking
+            if (requestBooking.dentistid == bookings.get(i).getDentistid()) {
+                requestedDentistConfirmedBookings.add(bookings.get(i));
+            } /**else {
+                // brand new dentist with no bookings get? Add booking!
+            }*/
+        }
+        return requestedDentistConfirmedBookings;
+    }
+
+    // Take the bookings that have the matching dentist, check if any of them have a date/time that matches the bookingRequest
+    // If any do, boolean becomes true, send array to XXXX method to check how many
+    // If none, boolean becomes false, booking possible! Send request to Booking component
+
+    public boolean checkForMatchingDate(ReceivedBooking requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
+        boolean check = false;
+
+        for (int i = 0; i < requestedDentistConfirmedBookings.size(); i++) {
+            if (requestedDentistConfirmedBookings.get(i).getTime().equals(requestBooking.time)) {
+                check = true;
+            }
+        }
+        return check;
+    }
+
+    // This counts how many bookings for the requested dentist match the requested time. Used in checkAppointmentSlots
+    public void countExistingAppointments(ArrayList<Booking> requestedDentistConfirmedBookings, ReceivedBooking requestBooking,
+                           ArrayList<Dentist> dentistRegistry) throws MqttException {
+        int count = 0;
+        long numberOfWorkingDentists = 0;
+        for (int i = 0; i < requestedDentistConfirmedBookings.size(); i++) {
+            if (requestedDentistConfirmedBookings.get(i).getTime() == requestBooking.time) {
+                count++;
+            }
+        }
+        numberOfWorkingDentists = checkDentistNumber(dentistRegistry, requestBooking);
+
+        // If count < #dentists, make booking
+        // If count = #dentists, no space left, send rejection
+
+        if(count < numberOfWorkingDentists) {
+            //MAKE BOOKING
+            ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.userid, requestBooking.requestid, requestBooking.dentistid, requestBooking.issuance, requestBooking.time);
+            dump(AcceptedBooking, "SuccessfulBooking");
+            System.out.println("ACCEPTED");
+        } else {
+            // REJECT BOOKING
+            ReceivedBooking rejectedBooking = new ReceivedBooking(requestBooking.userid, requestBooking.requestid, "none");
+            dump(rejectedBooking, "BookingResponse");
+            System.out.println("REJECTED");
+        }
+    }
+
+    // Used in countExistingAppointments to find the number of dentists working at dentistID location
+    public long checkDentistNumber(ArrayList<Dentist> dentistRegistry, ReceivedBooking requestBooking) {
+        long numberOfWorkingDentists = 0;
+        for (int i = 0; i < dentistRegistry.size(); i++) {
+            if (dentistRegistry.get(i).getId() == requestBooking.dentistid) {
+                numberOfWorkingDentists = dentistRegistry.get(i).getDentistNumber();
+            }
+        }
+        return numberOfWorkingDentists;
+    }
+    // If any bookings have the same date&time, boolean above is true, send array to XXXX method to check how many
+    // If none, boolean becomes false, booking possible! Send request to Booking component
+
+    public void checkAppointmentSlots(boolean checkedDate, ArrayList<Booking> requestedDentistConfirmedBookings,
+                            ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry) throws MqttException {
+        if (checkedDate == true) {
+            countExistingAppointments(requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
+
+        } else if(checkedDate == false){
+            // send request under SuccessfulBooking
+            ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.userid, requestBooking.requestid, requestBooking.dentistid, requestBooking.issuance, requestBooking.time);
+            dump(AcceptedBooking, "SuccessfulBooking");
+            System.out.println("ACCEPTED");
+        }
+    }
+
+    public void checkAvailability(ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry,
+                                  ArrayList<Booking> bookingRegistry) throws MqttException {
+
+        // Stores new filtered array of bookings for a particular dentist
+        ArrayList<Booking> requestedDentistConfirmedBookings = checkDentistBookings(requestBooking, bookingRegistry);
+        System.out.println(requestedDentistConfirmedBookings);
+        // Stores a boolean that returned by checkForMatchingDate (if there are existing appts on requested date)
+        //boolean checkedDate = checkForMatchingDate(requestBooking, requestedDentistConfirmedBookings);
+        // Now calls method to either accept appointment if none on date&time, or check how many and compare to # of
+        // dentists at location
+        //checkAppointmentSlots(checkedDate, requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
+
+        /**System.out.println("checkAvailability method starts running here");
         for (int i = 0; i < bookings.size(); i++) {
             System.out.println("This is the info we want, yay!" + bookings.get(i).getTime());
             System.out.println("This is the booking request info " + requestBooking);
@@ -230,7 +285,7 @@ public class Filter implements MqttCallback {
             }
 
         }
-        System.out.println("Finished the for-loop");
+        System.out.println("Finished the for-loop");*/
     }
 
     public ArrayList makeDentistArray(MqttMessage message) throws Exception {
