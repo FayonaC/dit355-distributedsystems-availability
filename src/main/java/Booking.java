@@ -1,5 +1,3 @@
-import java.math.BigInteger;
-
 public class Booking {
 
     private long userid;
@@ -54,6 +52,17 @@ public class Booking {
 
     public void setTime(String time) {
         this.time = time;
+    }
+
+    @Override
+    public String toString() {
+        return "\n{\n" +
+                "\"userid\": " + userid +
+                ",\n\"requestid\": " + requestid +
+                ",\n\"dentistid\": " + dentistid +
+                ",\n\"issuance\": " + issuance +
+                ",\n\"time\": \"" + time + "\"" +
+                "\n}\n";
     }
 
 }

@@ -137,7 +137,7 @@ public class Dentist {
     }
 
     /*add toString*/
-    /**@Override
+    @Override
     public String toString() {
         return "\n{\n" +
                 "\"id\": \"" + id + "\"" +
@@ -156,5 +156,5 @@ public class Dentist {
                 ",\n\"thursday\": \"" + thursday + "\"" +
                 ",\n\"friday\": \"" + friday + "\"" +
                 "\n}\n}";
-    }*/
+    }
 }

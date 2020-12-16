@@ -1,9 +1,49 @@
 public class ReceivedBooking {
-    public long userid;
-    public long requestid;
-    public long dentistid;
-    public long issuance;
-    public String time;
+    private long userid;
+    private long requestid;
+    private long dentistid;
+    private long issuance;
+    private String time;
+
+    public long getRequestid() {
+        return requestid;
+    }
+
+    public void setRequestid(long requestid) {
+        this.requestid = requestid;
+    }
+
+    public long getDentistid() {
+        return dentistid;
+    }
+
+    public void setDentistid(long dentistid) {
+        this.dentistid = dentistid;
+    }
+
+    public long getIssuance() {
+        return issuance;
+    }
+
+    public void setIssuance(long issuance) {
+        this.issuance = issuance;
+    }
+
+    public String getTime() {
+        return time;
+    }
+
+    public void setTime(String time) {
+        this.time = time;
+    }
+
+    public long getUserid() {
+        return userid;
+    }
+
+    public void setUserid(long userid) {
+        this.userid = userid;
+    }
 
     public ReceivedBooking(long userid, long requestid, long dentistid, long issuance, String time) {
         this.userid = userid;
