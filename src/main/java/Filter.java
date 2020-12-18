@@ -81,9 +81,11 @@ public class Filter implements MqttCallback {
                 break;
             case "BookingRegistry":
                 receivedBookingRegistry = makeBookingArray((incoming));
+                System.out.println("We have received an updated booking registry.");
                 break;
             case "Dentists":
                 receivedDentistRegistry = makeDentistArray(incoming);
+                System.out.println("We have received an updated dentist registry.");
                 break;
             default:
                 System.out.println("Topic not found");
@@ -92,7 +94,7 @@ public class Filter implements MqttCallback {
         if (receivedBooking != null) {
             checkAvailability(receivedBooking, receivedDentistRegistry, receivedBookingRegistry);
         } else {
-            System.out.println("Waiting for booking request...");
+            System.out.println("Waiting for a booking request...");
         }
     }
 
@@ -103,21 +105,23 @@ public class Filter implements MqttCallback {
     }
 
     // If booking(i).dentistID is the same as requestBooking.dentistID, add to ArrayList of bookings from the same dentist
-    public ArrayList checkDentistBookings(ReceivedBooking requestBooking, ArrayList<Booking> bookings) throws MqttException {
+    public ArrayList getDentistBookings(ReceivedBooking requestBooking, ArrayList<Booking> bookings) throws MqttException {
         ArrayList<Booking> requestedDentistConfirmedBookings = new ArrayList<Booking>();
 
         for (int i = 0; i < bookings.size(); i++) {
             // if the requested dentist office has the request timeslot available, make the booking
             if (requestBooking.getDentistid() == bookings.get(i).getDentistid()) {
-                Booking newBooking = bookings.get(i);
-                requestedDentistConfirmedBookings.add(newBooking);
+                Booking bookingExists = bookings.get(i);
+                requestedDentistConfirmedBookings.add(bookingExists);
 
-            } else {
-                // Adds booking when there is a dentist with no bookings
-                ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
-                dump(AcceptedBooking, "SuccessfulBooking");
-                System.out.println("ACCEPTED");
             }
+            // To do: add functionality for when a user requests an appointment from a dentist that is not in the bookings json.
+//            else {
+//                // Adds booking when there is a dentist with no bookings
+//                ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
+//                dump(AcceptedBooking, "SuccessfulBooking");
+//                System.out.println("ACCEPTED");
+//            }
         }
         return requestedDentistConfirmedBookings;
     }
@@ -135,12 +139,14 @@ public class Filter implements MqttCallback {
         return check;
     }
 
-    // This counts the number of appointments have already been made with the requested dentist at the requested time
+    // This method counts the number of appointments that have already been made with the requested dentist at the requested time
     // Used in checkAppointmentSlots
+
     public void countExistingAppointments(ArrayList<Booking> requestedDentistConfirmedBookings, ReceivedBooking requestBooking,
                                           ArrayList<Dentist> dentistRegistry) throws MqttException {
         int count = 0;
-        long numberOfWorkingDentists = 0;
+        long numberOfWorkingDentists = checkDentistNumber(dentistRegistry, requestBooking);
+
         for (int i = 0; i < requestedDentistConfirmedBookings.size(); i++) {
 
             if (requestedDentistConfirmedBookings.get(i).getTime().equals(requestBooking.getTime())) {
@@ -148,20 +154,15 @@ public class Filter implements MqttCallback {
             }
 
         }
-        numberOfWorkingDentists = checkDentistNumber(dentistRegistry, requestBooking);
 
         if (count < numberOfWorkingDentists) {
-            ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
-            dump(AcceptedBooking, "SuccessfulBooking");
-            System.out.println("ACCEPTED");
+            publishSuccessfulBooking(requestBooking);
         } else {
-            ReceivedBooking rejectedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), "none");
-            dump(rejectedBooking, "BookingResponse");
-            System.out.println("REJECTED");
+            publishRejectedBooking(requestBooking);
         }
     }
 
-    // Used in countExistingAppointments to find the number of dentists working at the requested location
+    // This method is used in countExistingAppointments to find the number of dentists working at the requested location
     public long checkDentistNumber(ArrayList<Dentist> dentistRegistry, ReceivedBooking requestBooking) {
         long numberOfWorkingDentists = 0;
         for (int i = 0; i < dentistRegistry.size(); i++) {
@@ -184,9 +185,8 @@ public class Filter implements MqttCallback {
             countExistingAppointments(requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
 
         } else if (checkedDate == false) {
-            ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
-            dump(AcceptedBooking, "SuccessfulBooking");
-            System.out.println("ACCEPTED");
+
+            publishSuccessfulBooking(requestBooking);
         }
     }
 
@@ -195,7 +195,7 @@ public class Filter implements MqttCallback {
                                   ArrayList<Booking> bookingRegistry) throws MqttException {
 
         // Stores new filtered array of bookings for a particular dentist
-        ArrayList<Booking> requestedDentistConfirmedBookings = checkDentistBookings(requestBooking, bookingRegistry);
+        ArrayList<Booking> requestedDentistConfirmedBookings = getDentistBookings(requestBooking, bookingRegistry);
 
         // Stores a boolean that is returned by checkForMatchingDate (if there are existing appts on requested date)
         boolean checkedDate = checkForMatchingDate(requestBooking, requestedDentistConfirmedBookings);
@@ -287,4 +287,17 @@ public class Filter implements MqttCallback {
 
         return newBooking;
     }
+    
+    public void publishSuccessfulBooking(ReceivedBooking requestBooking) throws MqttException {
+        ReceivedBooking acceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
+        dump(acceptedBooking, "SuccessfulBooking");
+        System.out.println("ACCEPTED");
+    }
+
+    public void publishRejectedBooking(ReceivedBooking requestBooking) throws MqttException {
+        ReceivedBooking rejectedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), "none");
+        dump(rejectedBooking, "BookingResponse");
+        System.out.println("REJECTED");
+    }
+
 }
