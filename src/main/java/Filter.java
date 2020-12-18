@@ -1,7 +1,9 @@
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import jdk.vm.ci.meta.Local;
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
@@ -17,6 +19,7 @@ public class Filter implements MqttCallback {
 
     private ArrayList receivedBookingRegistry;
     private ArrayList receivedDentistRegistry;
+    private LocalDate receivedSelecedDate;
 
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
@@ -34,6 +37,7 @@ public class Filter implements MqttCallback {
         s.subscribeToMessages("BookingRequest");
         s.subscribeToMessages("Dentists");
         s.subscribeToMessages("AvailabilityRequest");
+        s.subscribeToMessages("SelectedDate");
     }
 
     private void subscribeToMessages(String sourceTopic) {
@@ -81,9 +85,13 @@ public class Filter implements MqttCallback {
                 break;
             case "BookingRegistry":
                 receivedBookingRegistry = makeBookingArray((incoming));
+                System.out.println(receivedBookingRegistry);
                 break;
             case "Dentists":
                 receivedDentistRegistry = makeDentistArray(incoming);
+                break;
+            case "SelectedDate":
+                receivedSelecedDate = getSelectedDate(incoming);
                 break;
             default:
                 System.out.println("Topic not found");
@@ -98,6 +106,7 @@ public class Filter implements MqttCallback {
 
     private void dump(ReceivedBooking receivedBooking, String sinkTopic) throws MqttException {
         MqttMessage outgoing = new MqttMessage();
+        outgoing.setQos(2);
         outgoing.setPayload(receivedBooking.toString().getBytes());
         middleware.publish(sinkTopic, outgoing);
     }
@@ -112,12 +121,12 @@ public class Filter implements MqttCallback {
                 Booking newBooking = bookings.get(i);
                 requestedDentistConfirmedBookings.add(newBooking);
 
-            } else {
+            } /*else {
                 // Adds booking when there is a dentist with no bookings
                 ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
                 dump(AcceptedBooking, "SuccessfulBooking");
                 System.out.println("ACCEPTED");
-            }
+            }*/
         }
         return requestedDentistConfirmedBookings;
     }
@@ -150,10 +159,13 @@ public class Filter implements MqttCallback {
         }
         numberOfWorkingDentists = checkDentistNumber(dentistRegistry, requestBooking);
 
+        System.out.println(numberOfWorkingDentists);
+        System.out.println(count);
+
         if (count < numberOfWorkingDentists) {
             ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
             dump(AcceptedBooking, "SuccessfulBooking");
-            System.out.println("ACCEPTED");
+            System.out.println("ACCEPTED1");
         } else {
             ReceivedBooking rejectedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), "none");
             dump(rejectedBooking, "BookingResponse");
@@ -186,7 +198,7 @@ public class Filter implements MqttCallback {
         } else if (checkedDate == false) {
             ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
             dump(AcceptedBooking, "SuccessfulBooking");
-            System.out.println("ACCEPTED");
+            System.out.println("ACCEPTED2");
         }
     }
 
@@ -286,5 +298,14 @@ public class Filter implements MqttCallback {
         ReceivedBooking newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
 
         return newBooking;
+    }
+
+    public LocalDate getSelectedDate(MqttMessage message) {
+        String stringDate = message.toString();
+        LocalDate selectedDate = LocalDate.parse(stringDate);
+
+        return selectedDate;
+
+
     }
 }
