@@ -305,7 +305,5 @@ public class Filter implements MqttCallback {
         LocalDate selectedDate = LocalDate.parse(stringDate);
 
         return selectedDate;
-
-
     }
 }
