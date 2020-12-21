@@ -47,6 +47,21 @@ public class Schedule {
     }
 
     /**
+     * Taking all the timeslots and checking if they are available so that we end up with only available slots.
+     * @return availableSlots
+     */
+    private ArrayList<TimeSlot> getAvailableTimeSlots() {
+        ArrayList<TimeSlot> availableSlots = new ArrayList<>();
+
+        for (TimeSlot timeSlot : timeSlots) {
+            if (timeSlot.isAvailable()) {
+                availableSlots.add(timeSlot);
+            }
+        }
+        return availableSlots;
+    }
+
+    /**
      * Creates time slots and fills the schedule with them based on the opening hours and day of the week.
      */
     private void generateTimeSlots() {
@@ -145,4 +160,14 @@ public class Schedule {
             }
         }
     }
+
+    @Override
+    public String toString() {
+        return "{ dentist: " + dentist +
+                ", date: " + selectedDate +
+                ", timeSlots: " + getAvailableTimeSlots().toString() +
+        "}";
+    }
+
+
 }

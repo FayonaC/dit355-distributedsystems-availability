@@ -1,9 +1,8 @@
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import jdk.vm.ci.meta.Local;
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
@@ -19,7 +18,7 @@ public class Filter implements MqttCallback {
 
     private ArrayList receivedBookingRegistry;
     private ArrayList receivedDentistRegistry;
-    private LocalDate receivedSelecedDate;
+    private LocalDate receivedSelectedDate;
 
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
@@ -37,7 +36,22 @@ public class Filter implements MqttCallback {
         s.subscribeToMessages("BookingRequest");
         s.subscribeToMessages("Dentists");
         s.subscribeToMessages("AvailabilityRequest");
-        s.subscribeToMessages("SelectedDate");
+
+        /* LocalDate selectedDate = LocalDate.parse("2020-12-28", DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+        // Schedule schedule = new Schedule(new Dentist(1, "Your Dentist", "Test Test", 2,
+                "Slottskogen", "Gothenburg", 11.969388, 11.969388, "8:00-19:00", "7:00-19:00",
+                "7:00-19:00", "7:00-19:00", "7:00-19:00"), selectedDate);
+
+        System.out.println("Before bookings: " + schedule.getTimeSlots());
+
+        ArrayList<Booking> bookingRepo = new ArrayList<>();
+        bookingRepo.add(new Booking(1, 1, 1, 1234567891234L, "2020-12-28 9:00"));
+
+        schedule.setUnavailableTimeSlots(bookingRepo);
+
+        System.out.println("After bookings: " + schedule.getTimeSlots());
+        s.getAvailability();*/
     }
 
     private void subscribeToMessages(String sourceTopic) {
@@ -90,8 +104,9 @@ public class Filter implements MqttCallback {
             case "Dentists":
                 receivedDentistRegistry = makeDentistArray(incoming);
                 break;
-            case "SelectedDate":
-                receivedSelecedDate = getSelectedDate(incoming);
+            case "AvailabilityRequest":
+                receivedSelectedDate = getSelectedDate(incoming);
+                getAvailability();
                 break;
             default:
                 System.out.println("Topic not found");
@@ -301,8 +316,24 @@ public class Filter implements MqttCallback {
 
     public LocalDate getSelectedDate(MqttMessage message) {
         String stringDate = message.toString();
-        LocalDate selectedDate = LocalDate.parse(stringDate);
+        LocalDate selectedDate = LocalDate.parse(stringDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
         return selectedDate;
+    }
+
+    /**
+     * Gets the available slots which will be published ready to be used by the frontend
+     */
+    public void getAvailability() {
+        ArrayList<Schedule> schedules = new ArrayList<>();
+
+        for (Object dentist : receivedDentistRegistry) {
+            Schedule schedule = new Schedule((Dentist) dentist, receivedSelectedDate);
+            schedule.setUnavailableTimeSlots(receivedBookingRegistry);
+            schedules.add(schedule);
+        }
+        System.out.println("Available slot schedules: " + schedules);
+
+        // Next step is to publish the schedules ArrayList which contains available slots for all dental offices
     }
 }
