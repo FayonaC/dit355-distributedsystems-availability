@@ -120,7 +120,6 @@ public class Filter implements MqttCallback {
             if (requestBooking.getDentistid() == bookings.get(i).getDentistid()) {
                 Booking newBooking = bookings.get(i);
                 requestedDentistConfirmedBookings.add(newBooking);
-
             } /*else {
                 // Adds booking when there is a dentist with no bookings
                 ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
