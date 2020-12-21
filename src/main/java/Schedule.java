@@ -1,14 +1,17 @@
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import static java.time.temporal.ChronoUnit.HOURS;
 
 public class Schedule {
+    private final int SLOT_DURATION = 30; // Length of appointment time slots
+
     private ArrayList<TimeSlot> timeSlots;
     private Dentist dentist; // Dental office
-    private final int SLOT_DURATION = 30; // Length of appointment time slots
     private LocalDate selectedDate;
 
     /**
@@ -66,6 +69,8 @@ public class Schedule {
             timeSlots.add(new TimeSlot(slotStartTime, endTime, true));
             slotStartTime = endTime;
         }
+
+        setBreaks();
     }
 
     /**
@@ -84,5 +89,60 @@ public class Schedule {
         openingHoursList.add(closingHour);
 
         return openingHoursList;
+    }
+
+    /**
+     * Sets lunch break and fika break as unavailable in the schedule.
+     * Lunch is the hour in the middle of the day and break is always the first 30 minutes of the day.
+     *
+     * The lunch and break is dynamic which means that if a dental office changes its opening hours, the lunch and
+     * fika break will move. This will probably lead to bugs since the break slots might be unavailable due to
+     * bookings made before the change in opening hours. For the sake of simplicity and purposes of this project, we've
+     * decided not to address this issue.
+     *
+     * TODO: Change how breaks are set, possibly in Booking so the breaks are saved.
+     */
+    private void setBreaks() {
+        LocalTime start = timeSlots.get(0).startTime;
+        LocalTime end = timeSlots.get(timeSlots.size()-1).endTime;
+
+        // Difference in hours between start and end
+        long hoursOpen = start.until(end, HOURS);
+        long lunchHour = hoursOpen / 2;
+        LocalTime lunchStartTime = start.plusHours(lunchHour);
+
+        // Set the hour in the middle of the opening hours as lunch break
+        for (int i = 0; i < timeSlots.size()-1; i++) {
+            if (timeSlots.get(i).startTime == lunchStartTime) {
+                timeSlots.get(i).setAvailable(false);
+                timeSlots.get(i+1).setAvailable(false);
+                break;
+            }
+        }
+
+        // Fika break is always first slot of the day.
+        timeSlots.get(0).setAvailable(false);
+    }
+
+    /**
+     * Sets booked time slots to unavailable, i.e. changing available to false.
+     * @param bookings unavailable time slots
+     */
+    public void setUnavailableTimeSlots(ArrayList<Booking> bookings) {
+        for (Booking booking : bookings) {
+            // Find bookings for the dental office
+            if (booking.getDentistid() == dentist.getId()) {
+                LocalDateTime dateTime = LocalDateTime.parse(booking.getTime(), DateTimeFormatter.ofPattern("yyyy-MM-dd H:mm"));
+                // Match booking date with schedule date
+                if (selectedDate.equals(dateTime.toLocalDate())) {
+                    // Loop through available slots for that date & match time slots
+                    for (TimeSlot slot : timeSlots) {
+                        if (slot.startTime == dateTime.toLocalTime()) {
+                            slot.setAvailable(false);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
