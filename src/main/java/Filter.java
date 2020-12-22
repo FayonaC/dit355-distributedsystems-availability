@@ -2,6 +2,7 @@ import org.eclipse.paho.client.mqttv3.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
@@ -35,7 +36,7 @@ public class Filter implements MqttCallback {
     private void subscribeToMessages(String sourceTopic) {
         THREAD_POOL.submit(() -> {
             try {
-                middleware.subscribe(sourceTopic);
+                middleware.subscribe(sourceTopic,1);
             } catch (MqttSecurityException e) {
                 e.printStackTrace();
             } catch (MqttException e) {
@@ -68,7 +69,6 @@ public class Filter implements MqttCallback {
 
     @Override
     public void messageArrived(String topic, MqttMessage incoming) throws Exception {
-
         ReceivedBooking receivedBooking = null;
 
         switch (topic) {
@@ -98,7 +98,7 @@ public class Filter implements MqttCallback {
 
     private void dump(ReceivedBooking receivedBooking, String sinkTopic) throws MqttException {
         MqttMessage outgoing = new MqttMessage();
-       // outgoing.setQos(2); need to decide level
+        outgoing.setQos(1);
         outgoing.setPayload(receivedBooking.toString().getBytes());
         middleware.publish(sinkTopic, outgoing);
     }
