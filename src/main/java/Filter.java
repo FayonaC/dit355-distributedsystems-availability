@@ -4,6 +4,7 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -12,7 +13,7 @@ public class Filter implements MqttCallback {
 
     private ArrayList receivedBookingRegistry;
     private ArrayList receivedDentistRegistry;
-    private LocalDate receivedSelecedDate;
+    private LocalDate receivedSelectedDate;
 
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
@@ -30,7 +31,6 @@ public class Filter implements MqttCallback {
         s.subscribeToMessages("BookingRequest");
         s.subscribeToMessages("Dentists");
         s.subscribeToMessages("AvailabilityRequest");
-        s.subscribeToMessages("SelectedDate");
     }
 
     private void subscribeToMessages(String sourceTopic) {
@@ -82,8 +82,9 @@ public class Filter implements MqttCallback {
             case "Dentists":
                 receivedDentistRegistry = makeDentistArray(incoming);
                 break;
-            case "SelectedDate":
-                receivedSelecedDate = getSelectedDate(incoming);
+            case "AvailabilityRequest":
+                receivedSelectedDate = getSelectedDate(incoming);
+                getAvailability();
                 break;
             default:
                 System.out.println("Topic not found");
@@ -291,10 +292,42 @@ public class Filter implements MqttCallback {
         return newBooking;
     }
 
-    public LocalDate getSelectedDate(MqttMessage message) {
-        String stringDate = message.toString();
-        LocalDate selectedDate = LocalDate.parse(stringDate);
+    public LocalDate getSelectedDate (MqttMessage message) throws Exception {
+        JSONParser jsonParser = new JSONParser();
+        Object jsonObject = jsonParser.parse(message.toString());
+        JSONObject parser = (JSONObject) jsonObject;
+
+        String stringDate = (String) parser.get("date");
+        System.out.println("I have the message toString: " + stringDate);
+        LocalDate selectedDate = LocalDate.parse(stringDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        System.out.println("Here is the selected date: " + selectedDate);
 
         return selectedDate;
+    }
+
+    /**
+     * Gets the available slots which will be published ready to be used by the frontend
+     */
+    public void getAvailability() throws Exception {
+        ArrayList<Schedule> schedules = new ArrayList<>();
+
+        for (Object dentist : receivedDentistRegistry) {
+            Schedule schedule = new Schedule((Dentist) dentist, receivedSelectedDate);
+            schedule.setUnavailableTimeSlots(receivedBookingRegistry);
+            schedules.add(schedule);
+        }
+        sendMessage( "free-slots", "{ \"schedules\": " + schedules + "}");
+    }
+
+    /**
+     * Method to publish to the MQTT broker
+     * @param topic
+     * @param msg
+     * @throws MqttException
+     */
+    public void sendMessage(String topic, String msg) throws MqttException {
+        MqttMessage message = new MqttMessage();
+        message.setPayload(msg.getBytes());
+        middleware.publish(topic, message);
     }
 }

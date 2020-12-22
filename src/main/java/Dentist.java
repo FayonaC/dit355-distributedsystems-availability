@@ -1,3 +1,5 @@
+import java.util.HashMap;
+
 public class Dentist {
 
     private long id;
@@ -134,6 +136,23 @@ public class Dentist {
 
     public void setFriday(String friday) {
         this.friday = friday;
+    }
+
+    /**
+     * Returns the opening hours as a HashMap.
+     * Makes it easier to retrieve the opening hours based on the weekday.
+     * @return HashMap with all opening hours
+     */
+    public HashMap<String, String> getOpeningHours() {
+        HashMap<String, String> weekOpeningHours = new HashMap<>();
+
+        weekOpeningHours.put("monday", getMonday());
+        weekOpeningHours.put("tuesday", getTuesday());
+        weekOpeningHours.put("wednesday", getWednesday());
+        weekOpeningHours.put("thursday", getThursday());
+        weekOpeningHours.put("friday", getFriday());
+
+        return weekOpeningHours;
     }
 
     /*add toString*/
