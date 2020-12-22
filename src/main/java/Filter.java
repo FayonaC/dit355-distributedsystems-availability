@@ -3,13 +3,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.eclipse.paho.client.mqttv3.IMqttClient;
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.MqttSecurityException;
+
+import org.eclipse.paho.client.mqttv3.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -36,22 +31,6 @@ public class Filter implements MqttCallback {
         s.subscribeToMessages("BookingRequest");
         s.subscribeToMessages("Dentists");
         s.subscribeToMessages("AvailabilityRequest");
-
-        /* LocalDate selectedDate = LocalDate.parse("2020-12-28", DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-
-        // Schedule schedule = new Schedule(new Dentist(1, "Your Dentist", "Test Test", 2,
-                "Slottskogen", "Gothenburg", 11.969388, 11.969388, "8:00-19:00", "7:00-19:00",
-                "7:00-19:00", "7:00-19:00", "7:00-19:00"), selectedDate);
-
-        System.out.println("Before bookings: " + schedule.getTimeSlots());
-
-        ArrayList<Booking> bookingRepo = new ArrayList<>();
-        bookingRepo.add(new Booking(1, 1, 1, 1234567891234L, "2020-12-28 9:00"));
-
-        schedule.setUnavailableTimeSlots(bookingRepo);
-
-        System.out.println("After bookings: " + schedule.getTimeSlots());
-        s.getAvailability();*/
     }
 
     private void subscribeToMessages(String sourceTopic) {
@@ -314,9 +293,15 @@ public class Filter implements MqttCallback {
         return newBooking;
     }
 
-    public LocalDate getSelectedDate(MqttMessage message) {
-        String stringDate = message.toString();
+    public LocalDate getSelectedDate (MqttMessage message) throws Exception {
+        JSONParser jsonParser = new JSONParser();
+        Object jsonObject = jsonParser.parse(message.toString());
+        JSONObject parser = (JSONObject) jsonObject;
+
+        String stringDate = (String) parser.get("date");
+        System.out.println("I have the message toString: " + stringDate);
         LocalDate selectedDate = LocalDate.parse(stringDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        System.out.println("Here is the selected date: " + selectedDate);
 
         return selectedDate;
     }
@@ -324,7 +309,7 @@ public class Filter implements MqttCallback {
     /**
      * Gets the available slots which will be published ready to be used by the frontend
      */
-    public void getAvailability() {
+    public void getAvailability() throws Exception {
         ArrayList<Schedule> schedules = new ArrayList<>();
 
         for (Object dentist : receivedDentistRegistry) {
@@ -332,8 +317,18 @@ public class Filter implements MqttCallback {
             schedule.setUnavailableTimeSlots(receivedBookingRegistry);
             schedules.add(schedule);
         }
-        System.out.println("Available slot schedules: " + schedules);
+        sendMessage( "free-slots", "{ \"schedules\": " + schedules + "}");
+    }
 
-        // Next step is to publish the schedules ArrayList which contains available slots for all dental offices
+    /**
+     * Method to publish to the MQTT broker
+     * @param topic
+     * @param msg
+     * @throws MqttException
+     */
+    public void sendMessage(String topic, String msg) throws MqttException {
+        MqttMessage message = new MqttMessage();
+        message.setPayload(msg.getBytes());
+        middleware.publish(topic, message);
     }
 }

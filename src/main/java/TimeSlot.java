@@ -39,6 +39,6 @@ public class TimeSlot {
     public String toString() {
         return "{ startTime: \"" + startTime +
                 "\", endTime: \"" + endTime +
-                "\", available: " + available + " }"; // Possibly remove this since frontend doesn't need it
+                " }";
     }
 }

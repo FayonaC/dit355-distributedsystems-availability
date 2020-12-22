@@ -152,7 +152,7 @@ public class Schedule {
                 if (selectedDate.equals(dateTime.toLocalDate())) {
                     // Loop through available slots for that date & match time slots
                     for (TimeSlot slot : timeSlots) {
-                        if (slot.startTime == dateTime.toLocalTime()) {
+                        if (slot.startTime.equals(dateTime.toLocalTime())) {
                             slot.setAvailable(false);
                         }
                     }
@@ -163,11 +163,9 @@ public class Schedule {
 
     @Override
     public String toString() {
-        return "{ dentist: " + dentist +
+        return "{ dentist: " + dentist.getId() +
                 ", date: " + selectedDate +
                 ", timeSlots: " + getAvailableTimeSlots().toString() +
-        "}";
+        "}\n";
     }
-
-
 }
