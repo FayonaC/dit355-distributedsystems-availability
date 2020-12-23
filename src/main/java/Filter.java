@@ -83,7 +83,9 @@ public class Filter implements MqttCallback {
                 receivedDentistRegistry = makeDentistArray(incoming);
                 break;
             case "AvailabilityRequest":
+                System.out.println("Test1");
                 receivedSelectedDate = getSelectedDate(incoming);
+                System.out.println("Test2");
                 getAvailability();
                 break;
             default:
@@ -298,9 +300,7 @@ public class Filter implements MqttCallback {
         JSONObject parser = (JSONObject) jsonObject;
 
         String stringDate = (String) parser.get("date");
-        System.out.println("I have the message toString: " + stringDate);
         LocalDate selectedDate = LocalDate.parse(stringDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        System.out.println("Here is the selected date: " + selectedDate);
 
         return selectedDate;
     }

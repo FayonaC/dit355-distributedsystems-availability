@@ -37,8 +37,8 @@ public class TimeSlot {
 
     @Override
     public String toString() {
-        return "{ startTime: \"" + startTime +
-                "\", endTime: \"" + endTime +
-                " }";
+        return "{ \"startTime\": \"" + startTime +
+                "\", \"endTime\": \"" + endTime +
+                "\" }";
     }
 }
