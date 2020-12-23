@@ -90,9 +90,8 @@ public class Filter implements MqttCallback {
                 System.out.println("We have received an updated dentist registry.");
                 break;
             case "AvailabilityRequest":
-                System.out.println("Test1");
                 receivedSelectedDate = getSelectedDate(incoming);
-                System.out.println("Test2");
+                System.out.println("We have received a selected date.");
                 getAvailability();
                 break;
             default:
@@ -331,6 +330,7 @@ public class Filter implements MqttCallback {
             schedule.setUnavailableTimeSlots(receivedBookingRegistry);
             schedules.add(schedule);
         }
+
         sendMessage( "free-slots", "{ \"schedules\": " + schedules + "}");
     }
 
