@@ -60,6 +60,12 @@ public class Filter implements MqttCallback {
                 throwable.getMessage();
             }
         }
+        try {
+            middleware.subscribe(new String[]{"BookingRegistry", "Dentists", "BookingRequest", "AvailabilityRequest", "SelectedDate"});
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+
         System.out.println("Connection to broker reestablished!");
     }
 
