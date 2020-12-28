@@ -163,9 +163,9 @@ public class Schedule {
 
     @Override
     public String toString() {
-        return "{ dentist: " + dentist.getId() +
-                ", date: " + selectedDate +
-                ", timeSlots: " + getAvailableTimeSlots().toString() +
+        return "{ \"dentist\": " + dentist.getId() +
+                ", \"date\": \"" + selectedDate +
+                "\", \"timeSlots\": " + getAvailableTimeSlots().toString() +
         "}\n";
     }
 }
