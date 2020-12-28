@@ -19,10 +19,6 @@ import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.metrics.CircuitBreakerMetrics;
-
 public class Filter implements MqttCallback {
 
     private ArrayList receivedBookingRegistry;
@@ -32,40 +28,15 @@ public class Filter implements MqttCallback {
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
     private final IMqttClient middleware;
-    private CircuitBreaker circuitBreaker;
 
     public Filter(String userid, String broker) throws MqttPersistenceException, MqttException {
         middleware = new MqttClient(broker, userid);
         middleware.connect();
         middleware.setCallback(this);
-
-        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                .failureRateThreshold(10)	// open circuit if half of the service calls fail
-                .slidingWindow(10, 10, CircuitBreakerConfig.SlidingWindowType.TIME_BASED) // check last 20 seconds for failure rate (only if 10++ service calls)
-                .slowCallDurationThreshold(Duration.ofSeconds(2)) // calls with waiting time above 2 seconds are considered a failure
-                .slowCallRateThreshold(50)	// if half the service calls are too slow, open!
-                .build();
-
-        circuitBreaker = CircuitBreaker.of("availability", config);
-
-        // the service (business logic)
-        // GoldMachine goldMachine = new GoldMachine();
-
-        // circuitedGoldMachine = CircuitBreaker.decorateFunction(circuitBreaker, goldMachine);
-
-
-    }
-
-    public static void main(String[] args) {
-        try {
-            Filter s = new Filter("bookings-filter", "tcp://localhost:1883");
-            s.subscribeToMessages("BookingRegistry");
-            s.subscribeToMessages("BookingRequest");
-            s.subscribeToMessages("Dentists");
-            s.subscribeToMessages("AvailabilityRequest");
-        } catch (MqttException e) {
-            e.printStackTrace();
-        }
+        subscribeToMessages("BookingRegistry");
+        subscribeToMessages("BookingRequest");
+        subscribeToMessages("Dentists");
+        subscribeToMessages("AvailabilityRequest");
     }
 
     private void subscribeToMessages(String sourceTopic) {
@@ -130,7 +101,6 @@ public class Filter implements MqttCallback {
     @Override
     public void messageArrived(String topic, MqttMessage incoming) throws Exception {
         ReceivedBooking receivedBooking = null;
-        System.out.println(circuitBreaker.getState());
 
         switch (topic) {
             case "BookingRequest":
@@ -212,11 +182,7 @@ public class Filter implements MqttCallback {
             if (requestedDentistConfirmedBookings.get(i).getTime().equals(requestBooking.getTime())) {
                 count = count + 1;
             }
-
         }
-
-        System.out.println(numberOfWorkingDentists);
-        System.out.println(count);
 
         if (count < numberOfWorkingDentists) {
             publishSuccessfulBooking(requestBooking);
