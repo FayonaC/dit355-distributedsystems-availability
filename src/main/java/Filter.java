@@ -319,10 +319,31 @@ public class Filter implements MqttCallback {
         long issuance = (Long) parser.get("issuance");
         String time = (String) parser.get("time");
 
-        // Creating a booking object using the fields from the parsed JSON
-        ReceivedBooking newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
+        ReceivedBooking newBooking = null;
+        
+        try {
+        	// Creating a booking object using the fields from the parsed JSON
+        	newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
+        } catch (IllegalArgumentException e){
+        	System.err.println("Error when creating new Booking: " + e.getMessage());
+            String failedResponseJSON = "\n{\n" +
+            		  "\"userid\": " + userid +
+                      ",\n\"requestid\": " + requestid +
+                      ",\n\"time\": \"" + time + "\"" +
+                      "\n}\n";
 
+            publishMalformedBooking(failedResponseJSON);
+        }
         return newBooking;
+    }
+    
+    void publishMalformedBooking(String failedResponseJSON) throws MqttPersistenceException, MqttException {
+        MqttMessage message = new MqttMessage();
+        String msg = failedResponseJSON.toString();
+        message.setQos(1);
+        message.setPayload(msg.getBytes());
+        middleware.publish("BookingResponse", message);
+        System.out.println(message.toString());
     }
 
     public void publishSuccessfulBooking(ReceivedBooking requestBooking) throws MqttException {
