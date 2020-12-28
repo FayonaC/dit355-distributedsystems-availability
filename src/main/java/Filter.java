@@ -1,14 +1,27 @@
-import org.eclipse.paho.client.mqttv3.*;
+import org.eclipse.paho.client.mqttv3.IMqttClient;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttSecurityException;
+
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.metrics.CircuitBreakerMetrics;
 
 public class Filter implements MqttCallback {
 
@@ -19,28 +32,40 @@ public class Filter implements MqttCallback {
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
     private final IMqttClient middleware;
-    static Filter s;
+    private CircuitBreaker circuitBreaker;
 
-    static {
-        try {
-            s = new Filter("bookings-filter", "tcp://localhost:1883");
-        } catch (MqttException e) {
-            e.printStackTrace();
-        }
-    }
-
-
-    public Filter(String userid, String broker) throws MqttException {
+    public Filter(String userid, String broker) throws MqttPersistenceException, MqttException {
         middleware = new MqttClient(broker, userid);
         middleware.connect();
         middleware.setCallback(this);
+
+        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+                .failureRateThreshold(10)	// open circuit if half of the service calls fail
+                .slidingWindow(10, 10, CircuitBreakerConfig.SlidingWindowType.TIME_BASED) // check last 20 seconds for failure rate (only if 10++ service calls)
+                .slowCallDurationThreshold(Duration.ofSeconds(2)) // calls with waiting time above 2 seconds are considered a failure
+                .slowCallRateThreshold(50)	// if half the service calls are too slow, open!
+                .build();
+
+        circuitBreaker = CircuitBreaker.of("availability", config);
+
+        // the service (business logic)
+        // GoldMachine goldMachine = new GoldMachine();
+
+        // circuitedGoldMachine = CircuitBreaker.decorateFunction(circuitBreaker, goldMachine);
+
+
     }
 
-    public static void main(String[] args) throws MqttException {
-        s.subscribeToMessages("BookingRegistry");
-        s.subscribeToMessages("BookingRequest");
-        s.subscribeToMessages("Dentists");
-        s.subscribeToMessages("AvailabilityRequest");
+    public static void main(String[] args) {
+        try {
+            Filter s = new Filter("bookings-filter", "tcp://localhost:1883");
+            s.subscribeToMessages("BookingRegistry");
+            s.subscribeToMessages("BookingRequest");
+            s.subscribeToMessages("Dentists");
+            s.subscribeToMessages("AvailabilityRequest");
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
     }
 
     private void subscribeToMessages(String sourceTopic) {
@@ -105,6 +130,7 @@ public class Filter implements MqttCallback {
     @Override
     public void messageArrived(String topic, MqttMessage incoming) throws Exception {
         ReceivedBooking receivedBooking = null;
+        System.out.println(circuitBreaker.getState());
 
         switch (topic) {
             case "BookingRequest":
@@ -134,7 +160,7 @@ public class Filter implements MqttCallback {
         }
     }
 
-    private void dump(ReceivedBooking receivedBooking, String sinkTopic) throws MqttException {
+    private void dump(ReceivedBooking receivedBooking, String sinkTopic) throws MqttPersistenceException, MqttException {
         MqttMessage outgoing = new MqttMessage();
         outgoing.setQos(1);
         outgoing.setPayload(receivedBooking.toString().getBytes());
@@ -142,7 +168,7 @@ public class Filter implements MqttCallback {
     }
 
     // If booking(i).dentistID is the same as requestBooking.dentistID, add to ArrayList of bookings from the same dentist
-    public ArrayList getDentistBookings(ReceivedBooking requestBooking, ArrayList<Booking> bookings) throws MqttException {
+    public ArrayList getDentistBookings(ReceivedBooking requestBooking, ArrayList<Booking> bookings) throws MqttPersistenceException, MqttException {
         ArrayList<Booking> requestedDentistConfirmedBookings = new ArrayList<Booking>();
 
         for (int i = 0; i < bookings.size(); i++) {
@@ -177,7 +203,7 @@ public class Filter implements MqttCallback {
     // This method counts the number of appointments that have already been made with the requested dentist at the requested time
     // Used in checkAppointmentSlots
     public void countExistingAppointments(ArrayList<Booking> requestedDentistConfirmedBookings, ReceivedBooking requestBooking,
-                                          ArrayList<Dentist> dentistRegistry) throws MqttException {
+                                          ArrayList<Dentist> dentistRegistry) throws MqttPersistenceException, MqttException {
         int count = 0;
         long numberOfWorkingDentists = checkDentistNumber(dentistRegistry, requestBooking);
 
@@ -218,7 +244,7 @@ public class Filter implements MqttCallback {
     // If it is false, a booking is created as there are no appointments on the requested date and time
     public void checkAppointmentSlots(boolean checkedDate, ArrayList<
             Booking> requestedDentistConfirmedBookings,
-                                      ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry) throws MqttException {
+                                      ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry) throws MqttPersistenceException, MqttException {
         if (checkedDate == true) {
             countExistingAppointments(requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
 
@@ -229,7 +255,7 @@ public class Filter implements MqttCallback {
 
     // This is the main method that checks if the requested booking can be made
     public void checkAvailability(ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry,
-                                  ArrayList<Booking> bookingRegistry) throws MqttException {
+                                  ArrayList<Booking> bookingRegistry) throws MqttPersistenceException, MqttException {
 
         // Stores new filtered array of bookings for a particular dentist
         ArrayList<Booking> requestedDentistConfirmedBookings = getDentistBookings(requestBooking, bookingRegistry);
@@ -325,13 +351,13 @@ public class Filter implements MqttCallback {
         return newBooking;
     }
 
-    public void publishSuccessfulBooking(ReceivedBooking requestBooking) throws MqttException {
+    public void publishSuccessfulBooking(ReceivedBooking requestBooking) throws MqttPersistenceException, MqttException {
         ReceivedBooking acceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
         dump(acceptedBooking, "SuccessfulBooking");
         System.out.println("ACCEPTED");
     }
 
-    public void publishRejectedBooking(ReceivedBooking requestBooking) throws MqttException {
+    public void publishRejectedBooking(ReceivedBooking requestBooking) throws MqttPersistenceException, MqttException {
         ReceivedBooking rejectedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), "none");
         dump(rejectedBooking, "BookingResponse");
         System.out.println("REJECTED");
@@ -371,7 +397,7 @@ public class Filter implements MqttCallback {
      * @param msg
      * @throws MqttException
      */
-    public void sendMessage(String topic, String msg) throws MqttException {
+    public void sendMessage(String topic, String msg) throws MqttPersistenceException, MqttException {
         MqttMessage message = new MqttMessage();
         message.setPayload(msg.getBytes());
         middleware.publish(topic, message);
