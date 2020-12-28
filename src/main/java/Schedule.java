@@ -81,7 +81,10 @@ public class Schedule {
         // Creates time slots until slotStartTime is the same as closingHour
         while (slotStartTime != closingHour) {
             LocalTime endTime = slotStartTime.plusMinutes(SLOT_DURATION);
-            timeSlots.add(new TimeSlot(slotStartTime, endTime, true));
+            // Create time slots depending on the number of dentists at a dental office
+            for (int i = 0; i < dentist.getDentistNumber(); i++) {
+                timeSlots.add(new TimeSlot(slotStartTime, endTime, true));
+            }
             slotStartTime = endTime;
         }
 
@@ -126,17 +129,20 @@ public class Schedule {
         long lunchHour = hoursOpen / 2;
         LocalTime lunchStartTime = start.plusHours(lunchHour);
 
-        // Set the hour in the middle of the opening hours as lunch break
+        // Setting breaks
         for (int i = 0; i < timeSlots.size()-1; i++) {
+            // Set the first slot of the day as fika break
+            if (timeSlots.get(i).startTime == start) {
+                timeSlots.get(i).setAvailable(false);
+            }
+            // Setting the hour in the middle of the opening hours as lunch break
             if (timeSlots.get(i).startTime == lunchStartTime) {
                 timeSlots.get(i).setAvailable(false);
-                timeSlots.get(i+1).setAvailable(false);
-                break;
+            }
+            if (timeSlots.get(i).endTime == lunchStartTime.plusHours(1)) {
+                timeSlots.get(i).setAvailable(false);
             }
         }
-
-        // Fika break is always first slot of the day.
-        timeSlots.get(0).setAvailable(false);
     }
 
     /**
@@ -145,6 +151,7 @@ public class Schedule {
      */
     public void setUnavailableTimeSlots(ArrayList<Booking> bookings) {
         for (Booking booking : bookings) {
+            boolean handled = false; // Helps with multiple dentists
             // Find bookings for the dental office
             if (booking.getDentistid() == dentist.getId()) {
                 LocalDateTime dateTime = LocalDateTime.parse(booking.getTime(), DateTimeFormatter.ofPattern("yyyy-MM-dd H:mm"));
@@ -152,8 +159,9 @@ public class Schedule {
                 if (selectedDate.equals(dateTime.toLocalDate())) {
                     // Loop through available slots for that date & match time slots
                     for (TimeSlot slot : timeSlots) {
-                        if (slot.startTime.equals(dateTime.toLocalTime())) {
+                        if (slot.startTime.equals(dateTime.toLocalTime()) && !handled && slot.isAvailable()) {
                             slot.setAvailable(false);
+                            handled = true; // Sets to true because this booking has been dealt with
                         }
                     }
                 }
@@ -165,7 +173,7 @@ public class Schedule {
     public String toString() {
         return "{ \"dentist\": " + dentist.getId() +
                 ", \"date\": \"" + selectedDate +
-                "\", \"timeSlots\": " + getAvailableTimeSlots().toString() +
+                "\", \"timeSlots\": " + getAvailableTimeSlots() +
         "}\n";
     }
 }
