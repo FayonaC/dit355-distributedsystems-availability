@@ -141,6 +141,13 @@ public class Filter implements MqttCallback {
         middleware.publish(sinkTopic, outgoing);
     }
 
+    private void dumpRejected(RejectedBooking receivedBooking, String sinkTopic) throws MqttException {
+        MqttMessage outgoing = new MqttMessage();
+        outgoing.setQos(1);
+        outgoing.setPayload(receivedBooking.toString().getBytes());
+        middleware.publish(sinkTopic, outgoing);
+    }
+
     // If booking(i).dentistID is the same as requestBooking.dentistID, add to ArrayList of bookings from the same dentist
     public ArrayList getDentistBookings(ReceivedBooking requestBooking, ArrayList<Booking> bookings) throws MqttException {
         ArrayList<Booking> requestedDentistConfirmedBookings = new ArrayList<Booking>();
@@ -223,7 +230,7 @@ public class Filter implements MqttCallback {
             countExistingAppointments(requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
 
         } else if (checkedDate == false) {
-            publishSuccessfulBooking(requestBooking);
+          publishSuccessfulBooking(requestBooking);
         }
     }
 
@@ -329,11 +336,12 @@ public class Filter implements MqttCallback {
         ReceivedBooking acceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
         dump(acceptedBooking, "SuccessfulBooking");
         System.out.println("ACCEPTED");
+
     }
 
     public void publishRejectedBooking(ReceivedBooking requestBooking) throws MqttException {
-        ReceivedBooking rejectedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), "none");
-        dump(rejectedBooking, "BookingResponse");
+        RejectedBooking rejectedBooking = new RejectedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), "none");
+        dumpRejected(rejectedBooking, "BookingResponse");
         System.out.println("REJECTED");
     }
 
