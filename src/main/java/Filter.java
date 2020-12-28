@@ -6,6 +6,7 @@ import org.json.simple.parser.JSONParser;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -18,6 +19,16 @@ public class Filter implements MqttCallback {
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
     private final IMqttClient middleware;
+    static Filter s;
+
+    static {
+        try {
+            s = new Filter("bookings-filter", "tcp://localhost:1883");
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     public Filter(String userid, String broker) throws MqttException {
         middleware = new MqttClient(broker, userid);
@@ -26,7 +37,6 @@ public class Filter implements MqttCallback {
     }
 
     public static void main(String[] args) throws MqttException {
-        Filter s = new Filter("bookings-filter", "tcp://localhost:1883");
         s.subscribeToMessages("BookingRegistry");
         s.subscribeToMessages("BookingRequest");
         s.subscribeToMessages("Dentists");
@@ -36,7 +46,7 @@ public class Filter implements MqttCallback {
     private void subscribeToMessages(String sourceTopic) {
         THREAD_POOL.submit(() -> {
             try {
-                middleware.subscribe(sourceTopic,1);
+                middleware.subscribe(sourceTopic, 1);
             } catch (MqttSecurityException e) {
                 e.printStackTrace();
             } catch (MqttException e) {
@@ -48,25 +58,44 @@ public class Filter implements MqttCallback {
     @Override
     public void connectionLost(Throwable throwable) {
         System.out.println("Connection lost!");
-        while (middleware.isConnected() == false) {
+        long startTime = System.currentTimeMillis();
+        long elapsedTime = 0;
 
+        while (middleware.isConnected() == false && elapsedTime < 60 * 1000) {
             // reestablish lost connection
             try {
                 Thread.sleep(3000);
                 System.out.println("Reconnecting..");
                 middleware.reconnect();
+                elapsedTime = (new Date()).getTime() - startTime;
 
             } catch (Exception e) {
+
+            }
+        }
+        if (middleware.isConnected() == false) {
+            try {
+                System.out.println("Tried reconnecting for 1 minute, now disconnecting..");
+                middleware.unsubscribe(new String[]{"BookingRegistry", "Dentists", "BookingRequest", "AvailabilityRequest", "SelectedDate"});
+                middleware.disconnect();
+                middleware.close();
+                System.out.println("Availability RIP :(");
+                System.out.println("Please restart broker and component");
+
+            } catch (
+                    MqttException mqttException) {
                 throwable.getMessage();
             }
         }
-        try {
-            middleware.subscribe(new String[]{"BookingRegistry", "Dentists", "BookingRequest", "AvailabilityRequest", "SelectedDate"});
-        } catch (MqttException e) {
-            e.printStackTrace();
-        }
 
-        System.out.println("Connection to broker reestablished!");
+        if (middleware.isConnected() == true) {
+            try {
+                middleware.subscribe(new String[]{"BookingRegistry", "Dentists", "BookingRequest", "AvailabilityRequest", "SelectedDate"});
+                System.out.println("Connection to broker reestablished!");
+            } catch (MqttException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override
@@ -134,7 +163,8 @@ public class Filter implements MqttCallback {
 
     // This method takes in a booking request and the requestedDentistConfirmedBookings from the checkDentistBooking method
     // and it checks if there are any date and time matches
-    public boolean checkForMatchingDate(ReceivedBooking requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
+    public boolean checkForMatchingDate(ReceivedBooking
+                                                requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
         boolean check = false;
 
         for (int i = 0; i < requestedDentistConfirmedBookings.size(); i++) {
@@ -147,7 +177,6 @@ public class Filter implements MqttCallback {
 
     // This method counts the number of appointments that have already been made with the requested dentist at the requested time
     // Used in checkAppointmentSlots
-
     public void countExistingAppointments(ArrayList<Booking> requestedDentistConfirmedBookings, ReceivedBooking requestBooking,
                                           ArrayList<Dentist> dentistRegistry) throws MqttException {
         int count = 0;
@@ -188,7 +217,8 @@ public class Filter implements MqttCallback {
     // at least one booking on that date, so it counts how many appointments there are and compares it to the number of
     // dentists working at that location
     // If it is false, a booking is created as there are no appointments on the requested date and time
-    public void checkAppointmentSlots(boolean checkedDate, ArrayList<Booking> requestedDentistConfirmedBookings,
+    public void checkAppointmentSlots(boolean checkedDate, ArrayList<
+            Booking> requestedDentistConfirmedBookings,
                                       ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry) throws MqttException {
         if (checkedDate == true) {
             countExistingAppointments(requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
@@ -331,11 +361,12 @@ public class Filter implements MqttCallback {
             schedule.setUnavailableTimeSlots(receivedBookingRegistry);
             schedules.add(schedule);
         }
-        sendMessage( "free-slots", "{ \"schedules\": " + schedules + "}");
+        sendMessage("free-slots", "{ \"schedules\": " + schedules + "}");
     }
 
     /**
      * Method to publish to the MQTT broker
+     *
      * @param topic
      * @param msg
      * @throws MqttException
