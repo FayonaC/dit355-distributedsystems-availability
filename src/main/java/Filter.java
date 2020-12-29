@@ -1,4 +1,5 @@
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttException;
@@ -11,6 +12,7 @@ import org.eclipse.paho.client.mqttv3.MqttSecurityException;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -19,9 +21,10 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
-public class Filter implements MqttCallback, Supplier<Booking> {
+public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
 
     private ArrayList receivedBookingRegistry;
     private ArrayList receivedDentistRegistry;
@@ -30,35 +33,29 @@ public class Filter implements MqttCallback, Supplier<Booking> {
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
     private final IMqttClient middleware;
-
-    private static Filter s;
+    private static CircuitBreaker circuitBreaker;
+    private static Function<Object, ReceivedBooking> circuitedFilter;
 
     public Filter(String userid, String broker) throws MqttException {
         middleware = new MqttClient(broker, userid);
         middleware.connect();
         middleware.setCallback(this);
-
-        /*CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                .failureRateThreshold(50)	// percentage of failed things, open circuit if half of the service calls fail
-                //.slidingWindow(20, 10, CircuitBreakerConfig.SlidingWindowType.TIME_BASED) // check last 10 seconds for failure rate (only if 10++ service calls)
-                // .slowCallDurationThreshold(Duration.ofSeconds(1)) // calls with waiting time above 2 seconds are considered a failure
-                // .slowCallRateThreshold(70)	// if half the service calls are too slow, open!
-                // .permittedNumberOfCallsInHalfOpenState(5)
-                //.waitDurationInOpenState(Duration.ofSeconds(5))
-                .build();
-
-        circuitBreaker = CircuitBreaker.of("availability", config);*/
-
-        try {
-            //CircuitBreaker.decorateSupplier(circuitBreaker, s);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     public static void main(String[] args) {
         try {
-            s = new Filter("bookings-filter", "tcp://localhost:1883");
+            CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+                    .failureRateThreshold(50)	// percentage of failed things, open circuit if half of the service calls fail
+                    //.slidingWindow(20, 10, CircuitBreakerConfig.SlidingWindowType.TIME_BASED) // check last 10 seconds for failure rate (only if 10++ service calls)
+                    .slowCallDurationThreshold(Duration.ofMillis(100)) // calls with waiting time above 2 seconds are considered a failure
+                    .slowCallRateThreshold(50)	// if half the service calls are too slow, open!
+                    .permittedNumberOfCallsInHalfOpenState(5)
+                    .waitDurationInOpenState(Duration.ofSeconds(5))
+                    .build();
+
+            circuitBreaker = CircuitBreaker.of("availability", config);
+            Filter s = new Filter("bookings-filter", "tcp://localhost:1883");
+            circuitedFilter = CircuitBreaker.decorateFunction(circuitBreaker, s);
 
             s.subscribeToMessages("BookingRegistry");
             s.subscribeToMessages("BookingRequest");
@@ -134,9 +131,9 @@ public class Filter implements MqttCallback, Supplier<Booking> {
 
         switch (topic) {
             case "BookingRequest":
-                get();
-                //System.out.println(Coordinator.circuitBreaker.getState());
-                receivedBooking = makeReceivedBooking(incoming);
+                System.out.println("State before makeReceivedBooking:" + circuitBreaker.getState());
+                receivedBooking = circuitedFilter.apply(incoming);
+                System.out.println("State after makeReceivedBooking:" + circuitBreaker.getState());
                 break;
             case "BookingRegistry":
                 receivedBookingRegistry = makeBookingArray((incoming));
@@ -332,9 +329,15 @@ public class Filter implements MqttCallback, Supplier<Booking> {
         return bookingsRegistry;
     }
 
-    public ReceivedBooking makeReceivedBooking(MqttMessage message) throws Exception {
+    @Override
+    public ReceivedBooking apply(Object message) {
         JSONParser jsonParser = new JSONParser();
-        Object jsonObject = jsonParser.parse(message.toString());
+        Object jsonObject = null;
+        try {
+            jsonObject = jsonParser.parse(message.toString());
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
         JSONObject parser = (JSONObject) jsonObject;
 
         long userid = (Long) parser.get("userid");
@@ -399,10 +402,5 @@ public class Filter implements MqttCallback, Supplier<Booking> {
         MqttMessage message = new MqttMessage();
         message.setPayload(msg.getBytes());
         middleware.publish(topic, message);
-    }
-
-    @Override
-    public Booking get() {
-        return null;
     }
 }
