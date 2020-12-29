@@ -1,8 +1,6 @@
-public class ReceivedBooking {
+public class RejectedBooking {
     private long userid;
     private long requestid;
-    private long dentistid;
-    private long issuance;
     private String time;
 
     public long getRequestid() {
@@ -11,22 +9,6 @@ public class ReceivedBooking {
 
     public void setRequestid(long requestid) {
         this.requestid = requestid;
-    }
-
-    public long getDentistid() {
-        return dentistid;
-    }
-
-    public void setDentistid(long dentistid) {
-        this.dentistid = dentistid;
-    }
-
-    public long getIssuance() {
-        return issuance;
-    }
-
-    public void setIssuance(long issuance) {
-        this.issuance = issuance;
     }
 
     public String getTime() {
@@ -45,11 +27,9 @@ public class ReceivedBooking {
         this.userid = userid;
     }
 
-    public ReceivedBooking(long userid, long requestid, long dentistid, long issuance, String time) {
+    public RejectedBooking(long userid, long requestid, String time) {
         this.userid = userid;
         this.requestid = requestid;
-        this.dentistid = dentistid;
-        this.issuance = issuance;
         this.time = time;
     }
 
@@ -57,8 +37,6 @@ public class ReceivedBooking {
         return "\n{\n" +
                 "\"userid\": " + userid +
                 ",\n\"requestid\": " + requestid +
-                ",\n\"dentistid\": " + dentistid +
-                ",\n\"issuance\": " + issuance +
                 ",\n\"time\": \"" + time + "\"" +
                 "\n}\n";
     }
