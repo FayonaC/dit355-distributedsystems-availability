@@ -1,3 +1,4 @@
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttException;
@@ -18,8 +19,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
-public class Filter implements MqttCallback {
+public class Filter implements MqttCallback, Supplier<Booking> {
 
     private ArrayList receivedBookingRegistry;
     private ArrayList receivedDentistRegistry;
@@ -29,14 +31,42 @@ public class Filter implements MqttCallback {
 
     private final IMqttClient middleware;
 
-    public Filter(String userid, String broker) throws MqttPersistenceException, MqttException {
+    private static Filter s;
+
+    public Filter(String userid, String broker) throws MqttException {
         middleware = new MqttClient(broker, userid);
         middleware.connect();
         middleware.setCallback(this);
-        subscribeToMessages("BookingRegistry");
-        subscribeToMessages("BookingRequest");
-        subscribeToMessages("Dentists");
-        subscribeToMessages("AvailabilityRequest");
+
+        /*CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+                .failureRateThreshold(50)	// percentage of failed things, open circuit if half of the service calls fail
+                //.slidingWindow(20, 10, CircuitBreakerConfig.SlidingWindowType.TIME_BASED) // check last 10 seconds for failure rate (only if 10++ service calls)
+                // .slowCallDurationThreshold(Duration.ofSeconds(1)) // calls with waiting time above 2 seconds are considered a failure
+                // .slowCallRateThreshold(70)	// if half the service calls are too slow, open!
+                // .permittedNumberOfCallsInHalfOpenState(5)
+                //.waitDurationInOpenState(Duration.ofSeconds(5))
+                .build();
+
+        circuitBreaker = CircuitBreaker.of("availability", config);*/
+
+        try {
+            //CircuitBreaker.decorateSupplier(circuitBreaker, s);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            s = new Filter("bookings-filter", "tcp://localhost:1883");
+
+            s.subscribeToMessages("BookingRegistry");
+            s.subscribeToMessages("BookingRequest");
+            s.subscribeToMessages("Dentists");
+            s.subscribeToMessages("AvailabilityRequest");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void subscribeToMessages(String sourceTopic) {
@@ -66,7 +96,7 @@ public class Filter implements MqttCallback {
                 elapsedTime = (new Date()).getTime() - startTime;
 
             } catch (Exception e) {
-
+                e.printStackTrace();
             }
         }
         if (middleware.isConnected() == false) {
@@ -104,6 +134,8 @@ public class Filter implements MqttCallback {
 
         switch (topic) {
             case "BookingRequest":
+                get();
+                //System.out.println(Coordinator.circuitBreaker.getState());
                 receivedBooking = makeReceivedBooking(incoming);
                 break;
             case "BookingRegistry":
@@ -367,5 +399,10 @@ public class Filter implements MqttCallback {
         MqttMessage message = new MqttMessage();
         message.setPayload(msg.getBytes());
         middleware.publish(topic, message);
+    }
+
+    @Override
+    public Booking get() {
+        return null;
     }
 }
