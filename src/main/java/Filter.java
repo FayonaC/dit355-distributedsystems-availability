@@ -1,8 +1,12 @@
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.vavr.CheckedRunnable;
 import org.eclipse.paho.client.mqttv3.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -10,7 +14,7 @@ import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class Filter implements MqttCallback {
+public class Filter implements MqttCallback, CheckedRunnable {
 
     private ArrayList receivedBookingRegistry;
     private ArrayList receivedDentistRegistry;
@@ -19,16 +23,7 @@ public class Filter implements MqttCallback {
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
     private final IMqttClient middleware;
-    static Filter s;
-
-    static {
-        try {
-            s = new Filter("bookings-filter", "tcp://localhost:1883");
-        } catch (MqttException e) {
-            e.printStackTrace();
-        }
-    }
-
+    private static Filter s;
 
     public Filter(String userid, String broker) throws MqttException {
         middleware = new MqttClient(broker, userid);
@@ -36,7 +31,33 @@ public class Filter implements MqttCallback {
         middleware.setCallback(this);
     }
 
-    public static void main(String[] args) throws MqttException {
+    public static void main(String[] args) {
+        try {
+            // Create a custom RateLimiter configuration
+            RateLimiterConfig config = RateLimiterConfig.custom()
+                    .timeoutDuration(Duration.ofSeconds(10))
+                    .limitRefreshPeriod(Duration.ofSeconds(1))
+                    .limitForPeriod(1)
+                    .build();
+
+            // Create a RateLimiter
+            RateLimiter rateLimiter = RateLimiter.of("availability", config);
+
+            s = new Filter("bookings-filter", "tcp://localhost:1883");
+
+            // Decorate your call to BackendService.doSomething()
+           CheckedRunnable anything = RateLimiter
+                    .decorateCheckedRunnable(rateLimiter, s::run);
+            s.run();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } catch (Throwable throwable) {
+            throwable.printStackTrace();
+        }
+    }
+
+    @Override
+    public void run() throws Throwable {
         s.subscribeToMessages("BookingRegistry");
         s.subscribeToMessages("BookingRequest");
         s.subscribeToMessages("Dentists");
