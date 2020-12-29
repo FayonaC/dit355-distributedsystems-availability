@@ -1,5 +1,6 @@
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 public class Booking {
 
@@ -73,12 +74,20 @@ public class Booking {
         return time;
     }
 
-    public void setTime(String time) {
-    	try {
+    public boolean timeIsValid(String time) {
+        try {
             LocalDateTime.parse(time, DateTimeFormatter.ofPattern("yyyy-MM-dd H:mm"));
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+        return true;
+    }
+
+    public void setTime(String time) {
+        if (timeIsValid(time)) {
             this.time = time;
-        } catch (IllegalArgumentException e) {
-            System.out.println("Time has to be in the format YYYY-MM-DD 00:00 (16 characters long including spaces, dashes, and colons)");
+        } else {
+            throw new IllegalArgumentException("Time has to be in the format YYYY-MM-DD 00:00 (16 characters long including spaces, dashes, and colons): " + time);
         }
     }
 
