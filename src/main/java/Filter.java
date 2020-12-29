@@ -165,7 +165,6 @@ public class Filter implements MqttCallback {
                 System.out.println("ACCEPTED");
             }*/
         }
-        System.out.println("getDentistBookings step complete");
         return requestedDentistConfirmedBookings;
     }
 
@@ -180,7 +179,6 @@ public class Filter implements MqttCallback {
                 check = true;
             }
         }
-        System.out.println("checkForMatchingDate step complete");
         return check;
     }
 
@@ -202,14 +200,10 @@ public class Filter implements MqttCallback {
         System.out.println(count);
 
         if (count < numberOfWorkingDentists) {
-            System.out.println("Doing the if for countExistsing Appointments - Comparing count to number of working dentists");
             publishSuccessfulBooking(requestBooking);
         } else {
-            System.out.println("doing the else for countExistingAppointments");
             publishRejectedBooking(requestBooking);
-            System.out.println("RejectedBooking published for countExistingAppointments");
         }
-        System.out.println("countExistingAppointments step complete");
     }
 
     // This method is used in countExistingAppointments to find the number of dentists working at the requested location
@@ -238,7 +232,6 @@ public class Filter implements MqttCallback {
         } else if (checkedDate == false) {
           publishSuccessfulBooking(requestBooking);
         }
-        System.out.println("checkAppointmentSlots step complete");
     }
 
     // This is the main method that checks if the requested booking can be made
@@ -254,7 +247,6 @@ public class Filter implements MqttCallback {
         // Now calls method to either accept appointment if none on date&time, or check how many and compare to # of
         // dentists at location
         checkAppointmentSlots(checkedDate, requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
-        System.out.println("checkAvailability step complete");
     }
 
     public ArrayList makeDentistArray(MqttMessage message) throws Exception {
@@ -362,7 +354,7 @@ public class Filter implements MqttCallback {
             String failedResponseJSON = "\n{\n" +
             		  "\"userid\": " + userid +
                       ",\n\"requestid\": " + requestid +
-                      ",\n\"time\": \"" + time + "\"" +
+                      ",\n\"time\": \"none\"" +
                       "\n}\n";
 
             publishMalformedBooking(failedResponseJSON);

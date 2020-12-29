@@ -96,14 +96,14 @@ public class Dentist {
     }
 
     public void setAddress(String address) {
-    	Pattern p = Pattern.compile("^[^!?(){}<>#;/%&$£@=+*]+$");
+    	Pattern p = Pattern.compile("^[^!?(){}<>#;/%&$@=+*]+$");
         Matcher m = p.matcher(address);
         boolean b = m.matches();
 
         if (b == true) {
             this.address = address;
          } else {
-            throw new IllegalArgumentException("Illegal characters in adress: " + address);
+            throw new IllegalArgumentException("Illegal characters in address: " + address);
          }
     }
 
@@ -112,7 +112,7 @@ public class Dentist {
     }
 
     public void setCity(String city) {
-    	Pattern p = Pattern.compile("^[^!?(){}<>#;/%&$£@=+*]+$");
+    	Pattern p = Pattern.compile("^[^!?(){}<>#;/%&$@=+*]+$");
         Matcher m = p.matcher(city);
         boolean b = m.matches();
         if (b == false) {
