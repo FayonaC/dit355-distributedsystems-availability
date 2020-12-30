@@ -27,7 +27,7 @@ public class Filter implements Supplier<ReceivedBooking>  {
      */
     @Override
     public ReceivedBooking get() {
-        /*if (ThreadLocalRandom.current().nextDouble() > 1) {
+        /*if (ThreadLocalRandom.current().nextDouble() > 0.5) {
             throw new RuntimeException("PARTIAL FAILURE");
         }*/
 

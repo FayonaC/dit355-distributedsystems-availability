@@ -16,7 +16,7 @@ import java.util.function.Supplier;
 public class Communicator implements MqttCallback {
     private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
-    private final static Duration OPEN_WAIT_TIME_IN = Duration.ofSeconds(3);
+    private final static Duration OPEN_WAIT_TIME_IN = Duration.ofSeconds(2);
 
     private final static Filter SERVICE = new Filter();
 
@@ -31,11 +31,13 @@ public class Communicator implements MqttCallback {
         middleware.connect();
         middleware.setCallback(this);
 
-        int LOW_FAILURE_THRESHOLD = 10;
         CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                .failureRateThreshold(LOW_FAILURE_THRESHOLD)
-                .slidingWindow(20, 5, CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
-                .waitDurationInOpenState(OPEN_WAIT_TIME_IN).build();
+                .failureRateThreshold(10)
+                .slidingWindow(2, 1, CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .waitDurationInOpenState(OPEN_WAIT_TIME_IN)
+                .slowCallDurationThreshold(Duration.ofMillis(100)) // calls with waiting time above 1 seconds are considered a failure
+                .slowCallRateThreshold(25)	// if half the service calls are too slow, open!
+                .build();
 
         circuitBreaker = CircuitBreaker.of("availability", config);
         service = CircuitBreaker.decorateSupplier(circuitBreaker, SERVICE);
