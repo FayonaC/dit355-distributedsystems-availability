@@ -9,8 +9,8 @@
 ## Installation Guide
 1. Clone repository to your machine
 2. Open a terminal window (e.g. Command Prompt) and move to the root folder of the repository. Enter command `mvn clean install` This will create a target folder.
-3. To ensure that installation was successful, check target folder for filter.jar file.
-4. Move to target folder and enter command `java -jar filter.jar`. This will enable the Availability component to start listening to the MQTT Broker.
+3. To ensure that installation was successful, check target folder for communicator.jar file.
+4. Move to target folder and enter command `java -jar communicator.jar`. This will enable the Availability component to start listening to the MQTT Broker.
 
 ## Running Guide
 1. Open Command Prompt, 'Run as Administrator' and move to mosquitto folder.

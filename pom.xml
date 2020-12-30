@@ -42,7 +42,7 @@
                         <configuration>
                             <archive>
                                 <manifest>
-                                    <mainClass>Filter</mainClass>
+                                    <mainClass>Communicator</mainClass>
                                 </manifest>
                             </archive>
                             <descriptorRefs>

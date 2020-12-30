@@ -1,155 +1,34 @@
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import org.eclipse.paho.client.mqttv3.IMqttClient;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
-import org.eclipse.paho.client.mqttv3.MqttSecurityException;
-
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.function.Function;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
-public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
+/**
+ * Filter class is filtering a received booking using the pipe-and-filter style.
+ * It also filters out available time slots.
+ */
+public class Filter implements Supplier<ReceivedBooking>  {
 
-    private ArrayList receivedBookingRegistry;
-    private ArrayList receivedDentistRegistry;
+    private ArrayList<Booking> receivedBookingRegistry;
+    private ArrayList<Dentist> receivedDentistRegistry;
     private LocalDate receivedSelectedDate;
+    private ReceivedBooking receivedBooking;
 
-    private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
-
-    private final IMqttClient middleware;
-    private static CircuitBreaker circuitBreaker;
-    private static Function<Object, ReceivedBooking> circuitedFilter;
-
-    public Filter(String userid, String broker) throws MqttException {
-        middleware = new MqttClient(broker, userid);
-        middleware.connect();
-        middleware.setCallback(this);
-    }
-
-    public static void main(String[] args) {
-        try {
-            CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                    .failureRateThreshold(50)	// percentage of failed things, open circuit if half of the service calls fail
-                    //.slidingWindow(20, 10, CircuitBreakerConfig.SlidingWindowType.TIME_BASED) // check last 10 seconds for failure rate (only if 10++ service calls)
-                    .slowCallDurationThreshold(Duration.ofMillis(100)) // calls with waiting time above 2 seconds are considered a failure
-                    .slowCallRateThreshold(50)	// if half the service calls are too slow, open!
-                    .permittedNumberOfCallsInHalfOpenState(5)
-                    .waitDurationInOpenState(Duration.ofSeconds(5))
-                    .build();
-
-            circuitBreaker = CircuitBreaker.of("availability", config);
-            Filter s = new Filter("bookings-filter", "tcp://localhost:1883");
-            circuitedFilter = CircuitBreaker.decorateFunction(circuitBreaker, s);
-
-            s.subscribeToMessages("BookingRegistry");
-            s.subscribeToMessages("BookingRequest");
-            s.subscribeToMessages("Dentists");
-            s.subscribeToMessages("AvailabilityRequest");
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void subscribeToMessages(String sourceTopic) {
-        THREAD_POOL.submit(() -> {
-            try {
-                middleware.subscribe(sourceTopic, 1);
-            } catch (MqttSecurityException e) {
-                e.printStackTrace();
-            } catch (MqttException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
+    /**
+     * Throwing random exceptions.
+     * @return a ReceivedBooking that can be either successful or rejected.
+     */
     @Override
-    public void connectionLost(Throwable throwable) {
-        System.out.println("Connection lost!");
-        long startTime = System.currentTimeMillis();
-        long elapsedTime = 0;
-
-        while (middleware.isConnected() == false && elapsedTime < 60 * 1000) {
-            // reestablish lost connection
-            try {
-                Thread.sleep(3000);
-                System.out.println("Reconnecting..");
-                middleware.reconnect();
-                elapsedTime = (new Date()).getTime() - startTime;
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        if (middleware.isConnected() == false) {
-            try {
-                System.out.println("Tried reconnecting for 1 minute, now disconnecting..");
-                middleware.unsubscribe(new String[]{"BookingRegistry", "Dentists", "BookingRequest", "AvailabilityRequest", "SelectedDate"});
-                middleware.disconnect();
-                middleware.close();
-                System.out.println("Availability RIP :(");
-                System.out.println("Please restart broker and component");
-
-            } catch (
-                    MqttException mqttException) {
-                throwable.getMessage();
-            }
-        }
-
-        if (middleware.isConnected() == true) {
-            try {
-                middleware.subscribe(new String[]{"BookingRegistry", "Dentists", "BookingRequest", "AvailabilityRequest", "SelectedDate"});
-                System.out.println("Connection to broker reestablished!");
-            } catch (MqttException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    @Override
-    public void deliveryComplete(IMqttDeliveryToken token) {
-    }
-
-    @Override
-    public void messageArrived(String topic, MqttMessage incoming) throws Exception {
-        ReceivedBooking receivedBooking = null;
-
-        switch (topic) {
-            case "BookingRequest":
-                System.out.println("State before makeReceivedBooking:" + circuitBreaker.getState());
-                receivedBooking = circuitedFilter.apply(incoming);
-                System.out.println("State after makeReceivedBooking:" + circuitBreaker.getState());
-                break;
-            case "BookingRegistry":
-                receivedBookingRegistry = makeBookingArray((incoming));
-                System.out.println("We have received an updated booking registry.");
-                break;
-            case "Dentists":
-                receivedDentistRegistry = makeDentistArray(incoming);
-                System.out.println("We have received an updated dentist registry.");
-                break;
-            case "AvailabilityRequest":
-                receivedSelectedDate = getSelectedDate(incoming);
-                System.out.println("We have received a selected date.");
-                getAvailability();
-                break;
-            default:
-                System.out.println("Topic not found");
+    public ReceivedBooking get() {
+        if (ThreadLocalRandom.current().nextDouble() > 0.2) {
+            throw new RuntimeException("PARTIAL FAILURE");
         }
 
         if (receivedBooking != null) {
@@ -157,18 +36,13 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
         } else {
             System.out.println("Waiting for a booking request...");
         }
-    }
 
-    private void dump(ReceivedBooking receivedBooking, String sinkTopic) throws MqttPersistenceException, MqttException {
-        MqttMessage outgoing = new MqttMessage();
-        outgoing.setQos(1);
-        outgoing.setPayload(receivedBooking.toString().getBytes());
-        middleware.publish(sinkTopic, outgoing);
+        return receivedBooking;
     }
 
     // If booking(i).dentistID is the same as requestBooking.dentistID, add to ArrayList of bookings from the same dentist
-    public ArrayList getDentistBookings(ReceivedBooking requestBooking, ArrayList<Booking> bookings) throws MqttPersistenceException, MqttException {
-        ArrayList<Booking> requestedDentistConfirmedBookings = new ArrayList<Booking>();
+    public ArrayList<Booking> getDentistBookings(ReceivedBooking requestBooking, ArrayList<Booking> bookings) {
+        ArrayList<Booking> requestedDentistConfirmedBookings = new ArrayList<>();
 
         for (int i = 0; i < bookings.size(); i++) {
             // if the requested dentist office has the request timeslot available, make the booking
@@ -185,10 +59,14 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
         return requestedDentistConfirmedBookings;
     }
 
-    // This method takes in a booking request and the requestedDentistConfirmedBookings from the checkDentistBooking method
-    // and it checks if there are any date and time matches
-    public boolean checkForMatchingDate(ReceivedBooking
-                                                requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
+    /**
+     * This method takes in a booking request and the requestedDentistConfirmedBookings from the checkDentistBooking method
+     * and it checks if there are any date and time matches
+     * @param requestBooking
+     * @param requestedDentistConfirmedBookings
+     * @return
+     */
+    public boolean checkForMatchingDate(ReceivedBooking requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
         boolean check = false;
 
         for (int i = 0; i < requestedDentistConfirmedBookings.size(); i++) {
@@ -199,10 +77,15 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
         return check;
     }
 
-    // This method counts the number of appointments that have already been made with the requested dentist at the requested time
-    // Used in checkAppointmentSlots
+    /**
+     * This method counts the number of appointments that have already been made with the requested dentist at the requested time
+     * Used in checkAppointmentSlots
+     * @param requestedDentistConfirmedBookings
+     * @param requestBooking
+     * @param dentistRegistry
+     */
     public void countExistingAppointments(ArrayList<Booking> requestedDentistConfirmedBookings, ReceivedBooking requestBooking,
-                                          ArrayList<Dentist> dentistRegistry) throws MqttPersistenceException, MqttException {
+                                          ArrayList<Dentist> dentistRegistry) {
         int count = 0;
         long numberOfWorkingDentists = checkDentistNumber(dentistRegistry, requestBooking);
 
@@ -214,13 +97,18 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
         }
 
         if (count < numberOfWorkingDentists) {
-            publishSuccessfulBooking(requestBooking);
+            setSuccessfulBooking(requestBooking);
         } else {
-            publishRejectedBooking(requestBooking);
+            setRejectedBooking(requestBooking);
         }
     }
 
-    // This method is used in countExistingAppointments to find the number of dentists working at the requested location
+    /**
+     * This method is used in countExistingAppointments to find the number of dentists working at the requested location
+     * @param dentistRegistry
+     * @param requestBooking
+     * @return
+     */
     public long checkDentistNumber(ArrayList<Dentist> dentistRegistry, ReceivedBooking requestBooking) {
         long numberOfWorkingDentists = 0;
         for (int i = 0; i < dentistRegistry.size(); i++) {
@@ -233,24 +121,34 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
     // If any bookings have the same date&time, boolean above is true, send array to XXXX method to check how many
     // If none, boolean becomes false, booking possible! Send request to Booking component
 
-    // This method takes in a boolean from the checkForMatchingDate method, if it is true then it means there is already
-    // at least one booking on that date, so it counts how many appointments there are and compares it to the number of
-    // dentists working at that location
-    // If it is false, a booking is created as there are no appointments on the requested date and time
-    public void checkAppointmentSlots(boolean checkedDate, ArrayList<
-            Booking> requestedDentistConfirmedBookings,
-                                      ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry) throws MqttPersistenceException, MqttException {
+    /**
+     * This method takes in a boolean from the checkForMatchingDate method, if it is true then it means there is already
+     * at least one booking on that date, so it counts how many appointments there are and compares it to the number of
+     * dentists working at that location
+     * If it is false, a booking is created as there are no appointments on the requested date and time
+     * @param checkedDate
+     * @param requestedDentistConfirmedBookings
+     * @param requestBooking
+     * @param dentistRegistry
+     */
+    public void checkAppointmentSlots(boolean checkedDate, ArrayList<Booking> requestedDentistConfirmedBookings,
+                                      ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry) {
         if (checkedDate == true) {
             countExistingAppointments(requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
 
         } else if (checkedDate == false) {
-            publishSuccessfulBooking(requestBooking);
+            setSuccessfulBooking(requestBooking);
         }
     }
 
-    // This is the main method that checks if the requested booking can be made
+    /**
+     * This is the main method that checks if the requested booking can be made
+     * @param requestBooking
+     * @param dentistRegistry
+     * @param bookingRegistry
+     */
     public void checkAvailability(ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry,
-                                  ArrayList<Booking> bookingRegistry) throws MqttPersistenceException, MqttException {
+                                  ArrayList<Booking> bookingRegistry) {
 
         // Stores new filtered array of bookings for a particular dentist
         ArrayList<Booking> requestedDentistConfirmedBookings = getDentistBookings(requestBooking, bookingRegistry);
@@ -263,7 +161,7 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
         checkAppointmentSlots(checkedDate, requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
     }
 
-    public ArrayList makeDentistArray(MqttMessage message) throws Exception {
+    public void makeDentistArray(MqttMessage message) throws Exception {
         JSONParser jsonParser = new JSONParser();
         Object jsonObject = jsonParser.parse(message.toString());
         JSONObject dentistObj = (JSONObject) jsonObject;
@@ -300,10 +198,10 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
 
             dentistsRegistry.add(newDentist);
         }
-        return dentistsRegistry;
+        this.receivedDentistRegistry = dentistsRegistry;
     }
 
-    public ArrayList makeBookingArray(MqttMessage message) throws Exception {
+    public void makeBookingArray(MqttMessage message) throws Exception {
         JSONParser jsonParser = new JSONParser();
         Object jsonObject = jsonParser.parse(message.toString());
         JSONObject bookingObj = (JSONObject) jsonObject;
@@ -326,11 +224,10 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
 
             bookingsRegistry.add(newBooking);
         }
-        return bookingsRegistry;
+        this.receivedBookingRegistry = bookingsRegistry;
     }
 
-    @Override
-    public ReceivedBooking apply(Object message) {
+    public void makeReceivedBooking(Object message) {
         JSONParser jsonParser = new JSONParser();
         Object jsonObject = null;
         try {
@@ -349,23 +246,27 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
         // Creating a booking object using the fields from the parsed JSON
         ReceivedBooking newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
 
-        return newBooking;
+        this.receivedBooking = newBooking;
     }
 
-    public void publishSuccessfulBooking(ReceivedBooking requestBooking) throws MqttPersistenceException, MqttException {
+    private void setSuccessfulBooking(ReceivedBooking requestBooking) {
         ReceivedBooking acceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
-        dump(acceptedBooking, "SuccessfulBooking");
+        this.receivedBooking = acceptedBooking;
         System.out.println("ACCEPTED");
     }
 
-    public void publishRejectedBooking(ReceivedBooking requestBooking) throws MqttPersistenceException, MqttException {
+    private void setRejectedBooking(ReceivedBooking requestBooking) {
         ReceivedBooking rejectedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), "none");
-        dump(rejectedBooking, "BookingResponse");
+        this.receivedBooking = rejectedBooking;
         System.out.println("REJECTED");
     }
 
-
-    public LocalDate getSelectedDate (MqttMessage message) throws Exception {
+    /**
+     * Sets the selected date from an incoming message.
+     * @param message incoming MqttMessage containing a selected date
+     * @throws ParseException thrown when date cannot be parsed
+     */
+    public void setSelectedDate (MqttMessage message) throws ParseException {
         JSONParser jsonParser = new JSONParser();
         Object jsonObject = jsonParser.parse(message.toString());
         JSONObject parser = (JSONObject) jsonObject;
@@ -373,13 +274,14 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
         String stringDate = (String) parser.get("date");
         LocalDate selectedDate = LocalDate.parse(stringDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
-        return selectedDate;
+        this.receivedSelectedDate = selectedDate;
     }
 
     /**
-     * Gets the available slots which will be published ready to be used by the frontend
+     * Creates schedules for each dental office and sets the availability based on booking registry.
+     * @return the available slots which will be published ready to be used by the frontend
      */
-    public void getAvailability() throws Exception {
+    public ArrayList<Schedule> getAvailability() {
         ArrayList<Schedule> schedules = new ArrayList<>();
 
         for (Object dentist : receivedDentistRegistry) {
@@ -388,19 +290,6 @@ public class Filter implements MqttCallback, Function<Object, ReceivedBooking> {
             schedules.add(schedule);
         }
 
-        sendMessage("free-slots", "{ \"schedules\": " + schedules + "}");
-    }
-
-    /**
-     * Method to publish to the MQTT broker
-     *
-     * @param topic
-     * @param msg
-     * @throws MqttException
-     */
-    public void sendMessage(String topic, String msg) throws MqttPersistenceException, MqttException {
-        MqttMessage message = new MqttMessage();
-        message.setPayload(msg.getBytes());
-        middleware.publish(topic, message);
+        return schedules;
     }
 }
