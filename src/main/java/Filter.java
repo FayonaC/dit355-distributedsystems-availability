@@ -27,9 +27,9 @@ public class Filter implements Supplier<ReceivedBooking>  {
      */
     @Override
     public ReceivedBooking get() {
-        if (ThreadLocalRandom.current().nextDouble() > 0.2) {
+        /*if (ThreadLocalRandom.current().nextDouble() > 1) {
             throw new RuntimeException("PARTIAL FAILURE");
-        }
+        }*/
 
         if (receivedBooking != null) {
             checkAvailability(receivedBooking, receivedDentistRegistry, receivedBookingRegistry);
@@ -49,12 +49,7 @@ public class Filter implements Supplier<ReceivedBooking>  {
             if (requestBooking.getDentistid() == bookings.get(i).getDentistid()) {
                 Booking newBooking = bookings.get(i);
                 requestedDentistConfirmedBookings.add(newBooking);
-            } /*else {
-                // Adds booking when there is a dentist with no bookings
-                ReceivedBooking AcceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
-                dump(AcceptedBooking, "SuccessfulBooking");
-                System.out.println("ACCEPTED");
-            }*/
+            }
         }
         return requestedDentistConfirmedBookings;
     }
@@ -170,33 +165,40 @@ public class Filter implements Supplier<ReceivedBooking>  {
         ArrayList<Dentist> dentistsRegistry = new ArrayList<>();
 
         for (Object dentist : dentistsJSON) {
-
             JSONObject dObj = (JSONObject) dentist;
+            try {
 
-            long id = (Long) dObj.get("id");
-            String dentistName = (String) dObj.get("name");
-            String owner = (String) dObj.get("owner");
-            long dentistNumber = (Long) dObj.get("dentists");
-            String address = (String) dObj.get("address");
-            String city = (String) dObj.get("city");
+                long id = (Long) dObj.get("id");
+                String dentistName = (String) dObj.get("name");
+                String owner = (String) dObj.get("owner");
+                long dentistNumber = (Long) dObj.get("dentists");
+                String address = (String) dObj.get("address");
+                String city = (String) dObj.get("city");
 
-            JSONObject coordinateObj = (JSONObject) dObj.get("coordinate");
-            JSONObject openinghoursObj = (JSONObject) dObj.get("openinghours");
+                JSONObject coordinateObj = (JSONObject) dObj.get("coordinate");
+                JSONObject openinghoursObj = (JSONObject) dObj.get("openinghours");
 
-            double latitude = (Double) coordinateObj.get("latitude");
-            double longitude = (Double) coordinateObj.get("longitude");
-            String monday = (String) openinghoursObj.get("monday");
-            String tuesday = (String) openinghoursObj.get("tuesday");
-            String wednesday = (String) openinghoursObj.get("wednesday");
-            String thursday = (String) openinghoursObj.get("thursday");
-            String friday = (String) openinghoursObj.get("friday");
+                double latitude = (Double) coordinateObj.get("latitude");
+                double longitude = (Double) coordinateObj.get("longitude");
+                String monday = (String) openinghoursObj.get("monday");
+                String tuesday = (String) openinghoursObj.get("tuesday");
+                String wednesday = (String) openinghoursObj.get("wednesday");
+                String thursday = (String) openinghoursObj.get("thursday");
+                String friday = (String) openinghoursObj.get("friday");
 
-            // Adding dentist objects created using the fields from the parsed JSON to arraylist
-            Dentist newDentist = new Dentist(id, dentistName, owner, dentistNumber, address, city,
-                    latitude, longitude, monday, tuesday, wednesday, thursday,
-                    friday);
+                // Adding dentist objects created using the fields from the parsed JSON to arraylist
+                Dentist newDentist = new Dentist(id, dentistName, owner, dentistNumber, address, city,
+                        latitude, longitude, monday, tuesday, wednesday, thursday,
+                        friday);
 
-            dentistsRegistry.add(newDentist);
+                dentistsRegistry.add(newDentist);
+            } catch (IllegalArgumentException e) {
+                System.err.println("Error when creating new Dentist: " + e.getMessage());
+                System.err.println(dentistObj);
+            } catch (ClassCastException e) {
+                System.err.println("Error when creating new Dentist: " + e.getMessage());
+                System.err.println(dentistObj);
+            }
         }
         this.receivedDentistRegistry = dentistsRegistry;
     }
@@ -210,42 +212,46 @@ public class Filter implements Supplier<ReceivedBooking>  {
         ArrayList<Booking> bookingsRegistry = new ArrayList<>();
 
         for (Object booking : bookingsJSON) {
-
             JSONObject bObj = (JSONObject) booking;
+            try {
+                long userid = (Long) bObj.get("userid");
+                long requestid = (Long) bObj.get("requestid");
+                long dentistid = (Long) bObj.get("dentistid");
+                long issuance = (Long) bObj.get("issuance");
+                String time = (String) bObj.get("time");
 
-            long userid = (Long) bObj.get("userid");
-            long requestid = (Long) bObj.get("requestid");
-            long dentistid = (Long) bObj.get("dentistid");
-            long issuance = (Long) bObj.get("issuance");
-            String time = (String) bObj.get("time");
+                // Creating a booking object using the fields from the parsed JSON
+                Booking newBooking = new Booking(userid, requestid, dentistid, issuance, time);
 
-            // Creating a booking object using the fields from the parsed JSON
-            Booking newBooking = new Booking(userid, requestid, dentistid, issuance, time);
-
-            bookingsRegistry.add(newBooking);
+                bookingsRegistry.add(newBooking);
+            } catch (IllegalArgumentException e) {
+                System.err.println("Error when adding new Booking: " + e.getMessage());
+            } catch (ClassCastException e) {
+                System.err.println("Error when adding new Booking: " + e.getMessage());
+            }
         }
         this.receivedBookingRegistry = bookingsRegistry;
     }
 
-    public void makeReceivedBooking(Object message) {
+    public void makeReceivedBooking(Object message) throws ParseException, ClassCastException {
         JSONParser jsonParser = new JSONParser();
-        Object jsonObject = null;
-        try {
-            jsonObject = jsonParser.parse(message.toString());
-        } catch (ParseException e) {
-            e.printStackTrace();
-        }
+        ReceivedBooking newBooking = new ReceivedBooking();
+        Object jsonObject = jsonParser.parse(message.toString());
         JSONObject parser = (JSONObject) jsonObject;
 
-        long userid = (Long) parser.get("userid");
-        long requestid = (Long) parser.get("requestid");
-        long dentistid = (Long) parser.get("dentistid");
-        long issuance = (Long) parser.get("issuance");
-        String time = (String) parser.get("time");
+        try {
+            long userid = (Long) parser.get("userid");
+            long requestid = (Long) parser.get("requestid");
+            long dentistid = (Long) parser.get("dentistid");
+            long issuance = (Long) parser.get("issuance");
+            String time = (String) parser.get("time");
 
-        // Creating a booking object using the fields from the parsed JSON
-        ReceivedBooking newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
-
+        	// Creating a booking object using the fields from the parsed JSON
+        	newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
+        } catch (IllegalArgumentException e){
+        	System.err.println("Booking will be rejected: " + e.getMessage());
+            newBooking = new ReceivedBooking((Long) parser.get("userid"), (Long) parser.get("requestid"), "none");
+        }
         this.receivedBooking = newBooking;
     }
 
@@ -253,6 +259,7 @@ public class Filter implements Supplier<ReceivedBooking>  {
         ReceivedBooking acceptedBooking = new ReceivedBooking(requestBooking.getUserid(), requestBooking.getRequestid(), requestBooking.getDentistid(), requestBooking.getIssuance(), requestBooking.getTime());
         this.receivedBooking = acceptedBooking;
         System.out.println("ACCEPTED");
+
     }
 
     private void setRejectedBooking(ReceivedBooking requestBooking) {

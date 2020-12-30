@@ -91,7 +91,7 @@ public class Communicator implements MqttCallback {
                     if (!receivedBooking.getTime().equals("none")) {
                         dump("SuccessfulBooking", receivedBooking.toString());
                     } else {
-                        dump("BookingResponse", receivedBooking.toString());
+                        dump("BookingResponse", receivedBooking.getBookingResponse()); // Time should be none
                     }
 
                     System.out.println("State after makeReceivedBooking:" + circuitBreaker.getState());
@@ -120,7 +120,7 @@ public class Communicator implements MqttCallback {
             if (circuitBreaker.getState().equals(CircuitBreaker.State.OPEN)) {
                 System.err.println("Request rejected! (buffer request or tell requester!)");
             } else {
-                System.err.println(" Oh boy, the service failed! (buffer request or tell requester!)");
+                System.err.println("Oh boy, the service failed! (buffer request or tell requester!)");
             }
         }
     }
@@ -190,6 +190,7 @@ public class Communicator implements MqttCallback {
         MqttMessage outgoing = new MqttMessage();
         outgoing.setQos(1);
         outgoing.setPayload(msg.getBytes());
+        System.out.println(outgoing);
         middleware.publish(sinkTopic, outgoing);
     }
 }
