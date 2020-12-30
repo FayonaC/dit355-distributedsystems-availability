@@ -68,9 +68,8 @@ public class Filter implements MqttCallback {
                 System.out.println("Reconnecting..");
                 middleware.reconnect();
                 elapsedTime = (new Date()).getTime() - startTime;
-
             } catch (Exception e) {
-
+                e.printStackTrace();
             }
         }
         if (middleware.isConnected() == false) {
@@ -81,9 +80,7 @@ public class Filter implements MqttCallback {
                 middleware.close();
                 System.out.println("Availability RIP :(");
                 System.out.println("Please restart broker and component");
-
-            } catch (
-                    MqttException mqttException) {
+            } catch (MqttException mqttException) {
                 throwable.getMessage();
             }
         }
@@ -170,8 +167,7 @@ public class Filter implements MqttCallback {
 
     // This method takes in a booking request and the requestedDentistConfirmedBookings from the checkDentistBooking method
     // and it checks if there are any date and time matches
-    public boolean checkForMatchingDate(ReceivedBooking
-                                                requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
+    public boolean checkForMatchingDate(ReceivedBooking requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
         boolean check = false;
 
         for (int i = 0; i < requestedDentistConfirmedBookings.size(); i++) {
@@ -195,9 +191,6 @@ public class Filter implements MqttCallback {
                 count = count + 1;
             }
         }
-
-        System.out.println(numberOfWorkingDentists);
-        System.out.println(count);
 
         if (count < numberOfWorkingDentists) {
             publishSuccessfulBooking(requestBooking);
@@ -223,8 +216,7 @@ public class Filter implements MqttCallback {
     // at least one booking on that date, so it counts how many appointments there are and compares it to the number of
     // dentists working at that location
     // If it is false, a booking is created as there are no appointments on the requested date and time
-    public void checkAppointmentSlots(boolean checkedDate, ArrayList<
-            Booking> requestedDentistConfirmedBookings,
+    public void checkAppointmentSlots(boolean checkedDate, ArrayList<Booking> requestedDentistConfirmedBookings,
                                       ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry) throws MqttException {
         if (checkedDate == true) {
             countExistingAppointments(requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
@@ -258,7 +250,6 @@ public class Filter implements MqttCallback {
         ArrayList<Dentist> dentistsRegistry = new ArrayList<>();
 
         for (Object dentist : dentistsJSON) {
-
             JSONObject dObj = (JSONObject) dentist;
             try {
 
@@ -306,7 +297,6 @@ public class Filter implements MqttCallback {
         ArrayList<Booking> bookingsRegistry = new ArrayList<>();
 
         for (Object booking : bookingsJSON) {
-
             JSONObject bObj = (JSONObject) booking;
             try {
                 long userid = (Long) bObj.get("userid");

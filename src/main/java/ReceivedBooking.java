@@ -79,7 +79,7 @@ public class ReceivedBooking {
         if (timeIsValid(time)) {
             this.time = time;
         } else {
-            throw new IllegalArgumentException("Time has to be in the format YYYY-MM-DD 00:00 (16 characters long including spaces, dashes, and colons): " + time);
+            throw new IllegalArgumentException("Time has to be in the format YYYY-MM-DD H:mm (15-16 characters long including spaces, dashes, and colons): " + time);
         }
     }
 
