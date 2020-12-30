@@ -68,9 +68,8 @@ public class Filter implements MqttCallback {
                 System.out.println("Reconnecting..");
                 middleware.reconnect();
                 elapsedTime = (new Date()).getTime() - startTime;
-
             } catch (Exception e) {
-
+                e.printStackTrace();
             }
         }
         if (middleware.isConnected() == false) {
@@ -81,9 +80,7 @@ public class Filter implements MqttCallback {
                 middleware.close();
                 System.out.println("Availability RIP :(");
                 System.out.println("Please restart broker and component");
-
-            } catch (
-                    MqttException mqttException) {
+            } catch (MqttException mqttException) {
                 throwable.getMessage();
             }
         }
@@ -109,6 +106,7 @@ public class Filter implements MqttCallback {
         switch (topic) {
             case "BookingRequest":
                 receivedBooking = makeReceivedBooking(incoming);
+                System.out.println("We have received a new booking request.");
                 break;
             case "BookingRegistry":
                 receivedBookingRegistry = makeBookingArray((incoming));
@@ -169,8 +167,7 @@ public class Filter implements MqttCallback {
 
     // This method takes in a booking request and the requestedDentistConfirmedBookings from the checkDentistBooking method
     // and it checks if there are any date and time matches
-    public boolean checkForMatchingDate(ReceivedBooking
-                                                requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
+    public boolean checkForMatchingDate(ReceivedBooking requestBooking, ArrayList<Booking> requestedDentistConfirmedBookings) {
         boolean check = false;
 
         for (int i = 0; i < requestedDentistConfirmedBookings.size(); i++) {
@@ -193,11 +190,7 @@ public class Filter implements MqttCallback {
             if (requestedDentistConfirmedBookings.get(i).getTime().equals(requestBooking.getTime())) {
                 count = count + 1;
             }
-
         }
-
-        System.out.println(numberOfWorkingDentists);
-        System.out.println(count);
 
         if (count < numberOfWorkingDentists) {
             publishSuccessfulBooking(requestBooking);
@@ -223,8 +216,7 @@ public class Filter implements MqttCallback {
     // at least one booking on that date, so it counts how many appointments there are and compares it to the number of
     // dentists working at that location
     // If it is false, a booking is created as there are no appointments on the requested date and time
-    public void checkAppointmentSlots(boolean checkedDate, ArrayList<
-            Booking> requestedDentistConfirmedBookings,
+    public void checkAppointmentSlots(boolean checkedDate, ArrayList<Booking> requestedDentistConfirmedBookings,
                                       ReceivedBooking requestBooking, ArrayList<Dentist> dentistRegistry) throws MqttException {
         if (checkedDate == true) {
             countExistingAppointments(requestedDentistConfirmedBookings, requestBooking, dentistRegistry);
@@ -258,33 +250,40 @@ public class Filter implements MqttCallback {
         ArrayList<Dentist> dentistsRegistry = new ArrayList<>();
 
         for (Object dentist : dentistsJSON) {
-
             JSONObject dObj = (JSONObject) dentist;
+            try {
 
-            long id = (Long) dObj.get("id");
-            String dentistName = (String) dObj.get("name");
-            String owner = (String) dObj.get("owner");
-            long dentistNumber = (Long) dObj.get("dentists");
-            String address = (String) dObj.get("address");
-            String city = (String) dObj.get("city");
+                long id = (Long) dObj.get("id");
+                String dentistName = (String) dObj.get("name");
+                String owner = (String) dObj.get("owner");
+                long dentistNumber = (Long) dObj.get("dentists");
+                String address = (String) dObj.get("address");
+                String city = (String) dObj.get("city");
 
-            JSONObject coordinateObj = (JSONObject) dObj.get("coordinate");
-            JSONObject openinghoursObj = (JSONObject) dObj.get("openinghours");
+                JSONObject coordinateObj = (JSONObject) dObj.get("coordinate");
+                JSONObject openinghoursObj = (JSONObject) dObj.get("openinghours");
 
-            double latitude = (Double) coordinateObj.get("latitude");
-            double longitude = (Double) coordinateObj.get("longitude");
-            String monday = (String) openinghoursObj.get("monday");
-            String tuesday = (String) openinghoursObj.get("tuesday");
-            String wednesday = (String) openinghoursObj.get("wednesday");
-            String thursday = (String) openinghoursObj.get("thursday");
-            String friday = (String) openinghoursObj.get("friday");
+                double latitude = (Double) coordinateObj.get("latitude");
+                double longitude = (Double) coordinateObj.get("longitude");
+                String monday = (String) openinghoursObj.get("monday");
+                String tuesday = (String) openinghoursObj.get("tuesday");
+                String wednesday = (String) openinghoursObj.get("wednesday");
+                String thursday = (String) openinghoursObj.get("thursday");
+                String friday = (String) openinghoursObj.get("friday");
 
-            // Adding dentist objects created using the fields from the parsed JSON to arraylist
-            Dentist newDentist = new Dentist(id, dentistName, owner, dentistNumber, address, city,
-                    latitude, longitude, monday, tuesday, wednesday, thursday,
-                    friday);
+                // Adding dentist objects created using the fields from the parsed JSON to arraylist
+                Dentist newDentist = new Dentist(id, dentistName, owner, dentistNumber, address, city,
+                        latitude, longitude, monday, tuesday, wednesday, thursday,
+                        friday);
 
-            dentistsRegistry.add(newDentist);
+                dentistsRegistry.add(newDentist);
+            } catch (IllegalArgumentException e) {
+                System.err.println("Error when creating new Dentist: " + e.getMessage());
+                System.err.println(dentistObj);
+            } catch (ClassCastException e) {
+                System.err.println("Error when creating new Dentist: " + e.getMessage());
+                System.err.println(dentistObj);
+            }
         }
         return dentistsRegistry;
     }
@@ -298,19 +297,23 @@ public class Filter implements MqttCallback {
         ArrayList<Booking> bookingsRegistry = new ArrayList<>();
 
         for (Object booking : bookingsJSON) {
-
             JSONObject bObj = (JSONObject) booking;
+            try {
+                long userid = (Long) bObj.get("userid");
+                long requestid = (Long) bObj.get("requestid");
+                long dentistid = (Long) bObj.get("dentistid");
+                long issuance = (Long) bObj.get("issuance");
+                String time = (String) bObj.get("time");
 
-            long userid = (Long) bObj.get("userid");
-            long requestid = (Long) bObj.get("requestid");
-            long dentistid = (Long) bObj.get("dentistid");
-            long issuance = (Long) bObj.get("issuance");
-            String time = (String) bObj.get("time");
+                // Creating a booking object using the fields from the parsed JSON
+                Booking newBooking = new Booking(userid, requestid, dentistid, issuance, time);
 
-            // Creating a booking object using the fields from the parsed JSON
-            Booking newBooking = new Booking(userid, requestid, dentistid, issuance, time);
-
-            bookingsRegistry.add(newBooking);
+                bookingsRegistry.add(newBooking);
+            } catch (IllegalArgumentException e) {
+                System.err.println("Error when adding new Booking: " + e.getMessage());
+            } catch (ClassCastException e) {
+                System.err.println("Error when adding new Booking: " + e.getMessage());
+            }
         }
         return bookingsRegistry;
     }
@@ -320,16 +323,44 @@ public class Filter implements MqttCallback {
         Object jsonObject = jsonParser.parse(message.toString());
         JSONObject parser = (JSONObject) jsonObject;
 
-        long userid = (Long) parser.get("userid");
-        long requestid = (Long) parser.get("requestid");
-        long dentistid = (Long) parser.get("dentistid");
-        long issuance = (Long) parser.get("issuance");
-        String time = (String) parser.get("time");
+        long userid = 0;
+        long requestid = 0;
+        long dentistid = 0;
+        long issuance = 0;
+        String time = "";
+        ReceivedBooking newBooking = null;
 
-        // Creating a booking object using the fields from the parsed JSON
-        ReceivedBooking newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
+        try {
+            userid = (Long) parser.get("userid");
+            requestid = (Long) parser.get("requestid");
+            dentistid = (Long) parser.get("dentistid");
+            issuance = (Long) parser.get("issuance");
+            time = (String) parser.get("time");
 
+        	// Creating a booking object using the fields from the parsed JSON
+        	newBooking = new ReceivedBooking(userid, requestid, dentistid, issuance, time);
+        } catch (IllegalArgumentException e){
+        	System.err.println("Error when creating new Booking: " + e.getMessage());
+            String failedResponseJSON = "\n{\n" +
+            		  "\"userid\": " + userid +
+                      ",\n\"requestid\": " + requestid +
+                      ",\n\"time\": \"none\"" +
+                      "\n}\n";
+
+            publishMalformedBooking(failedResponseJSON);
+        } catch (ClassCastException e) {
+            System.err.println("Error when adding new Booking: " + e.getMessage());
+        }
         return newBooking;
+    }
+    
+    void publishMalformedBooking(String failedResponseJSON) throws MqttPersistenceException, MqttException {
+        MqttMessage message = new MqttMessage();
+        String msg = failedResponseJSON.toString();
+        message.setQos(1);
+        message.setPayload(msg.getBytes());
+        middleware.publish("BookingResponse", message);
+        System.out.println(message.toString());
     }
 
     public void publishSuccessfulBooking(ReceivedBooking requestBooking) throws MqttException {
