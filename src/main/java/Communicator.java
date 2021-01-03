@@ -1,5 +1,7 @@
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
 import org.eclipse.paho.client.mqttv3.*;
 
 import java.time.Duration;
@@ -32,11 +34,12 @@ public class Communicator implements MqttCallback {
         middleware.setCallback(this);
 
         CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                .failureRateThreshold(10)
-                .slidingWindow(2, 1, CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .failureRateThreshold(10) //Failures over 10% will open the circuit breaker
+                .slidingWindow(2, 1, CircuitBreakerConfig.SlidingWindowType.COUNT_BASED) //Evaluates per 2 calls
                 .waitDurationInOpenState(OPEN_WAIT_TIME_IN)
-                .slowCallDurationThreshold(Duration.ofMillis(100)) // calls with waiting time above 1 seconds are considered a failure
-                .slowCallRateThreshold(25)	// if half the service calls are too slow, open!
+                .permittedNumberOfCallsInHalfOpenState(5)
+                .slowCallDurationThreshold(Duration.ofMillis(1)) // Calls with waiting time above 1 millisecond are considered a failure
+                .slowCallRateThreshold(1)	// Circuit breaker will open is over 1% of calls are slow
                 .build();
 
         circuitBreaker = CircuitBreaker.of("availability", config);
@@ -52,8 +55,10 @@ public class Communicator implements MqttCallback {
             c.subscribeToMessages("AvailabilityRequest");
         } catch (Exception e) {
             e.printStackTrace();
-        }
+        } catch(Throwable throwable) {
+            throwable.printStackTrace();
     }
+}
 
     /**
      * Subscribes to messages in a thread pool.
@@ -88,14 +93,14 @@ public class Communicator implements MqttCallback {
                 case "BookingRequest":
                     System.out.println("State before makeReceivedBooking:" + circuitBreaker.getState());
                     SERVICE.makeReceivedBooking(incoming);
+                    System.out.println("State after SERVICE.makeReceivedBooking:" + circuitBreaker.getState());
                     receivedBooking = service.get(); // Could be a successful or failed booking
-
+                    System.out.println("State after receivedBooking:" + circuitBreaker.getState());
                     if (!receivedBooking.getTime().equals("none")) {
                         dump("SuccessfulBooking", receivedBooking.toString());
                     } else {
                         dump("BookingResponse", receivedBooking.getBookingResponse()); // Time should be none
                     }
-
                     System.out.println("State after makeReceivedBooking:" + circuitBreaker.getState());
                     break;
                 case "BookingRegistry":
@@ -116,13 +121,13 @@ public class Communicator implements MqttCallback {
                     System.out.println("Topic not found");
             }
 
-            System.out.println("state: " + circuitBreaker.getState());
+            System.out.println("State of circuit breaker: " + circuitBreaker.getState());
         } catch (RuntimeException e) {
-            System.err.println("state: " + circuitBreaker.getState());
+            System.err.println("State when there is a runtime exception: " + circuitBreaker.getState());
             if (circuitBreaker.getState().equals(CircuitBreaker.State.OPEN)) {
-                System.err.println("Request rejected! (buffer request or tell requester!)");
+                System.err.println("Request rejected!");
             } else {
-                System.err.println("Oh boy, the service failed! (buffer request or tell requester!)");
+                System.err.println("Service has failed!");
             }
         }
     }
@@ -140,7 +145,7 @@ public class Communicator implements MqttCallback {
         while (middleware.isConnected() == false && elapsedTime < 60 * 1000) {
             // reestablish lost connection
             try {
-                Thread.sleep(3000);
+                Thread.sleep(8000); //original number is 3000
                 System.out.println("Reconnecting..");
                 middleware.reconnect();
                 elapsedTime = (new Date()).getTime() - startTime;
@@ -194,5 +199,6 @@ public class Communicator implements MqttCallback {
         outgoing.setPayload(msg.getBytes());
         System.out.println(outgoing);
         middleware.publish(sinkTopic, outgoing);
+        System.out.println("Message published!");
     }
 }
