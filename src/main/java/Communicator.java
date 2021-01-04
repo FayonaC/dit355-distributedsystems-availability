@@ -16,9 +16,16 @@ import java.util.function.Supplier;
  * Communicator is based on the circuit-breaker-example: https://git.chalmers.se/dobslaw/circuit-breaker-example
  */
 public class Communicator implements MqttCallback {
-    private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
+    //The circuit breaker settings below may need to be changed depending on your computer processing speed
+    private final static Duration OPEN_WAIT_TIME = Duration.ofSeconds(2);
+    private final static long FAILURE_RATE_THRESHOLD = 10; //Failures over 10% will open the circuit breaker
+    private final static int SLIDING_WINDOW_SIZE = 5; //Evaluates per 5 calls
+    private final static int MINIMUM_CALLS = 3; // The minimum number of calls that need to be executed per sliding window
+    private final static int PERMITTED_CALLS = 5; // The number of calls permitted when the circuit breaker is half open
+    private final static Duration SLOW_CALL_DURATION_THRESHOLD = Duration.ofNanos(800000); // Calls with waiting time above this are considered a failure
+    private final static long SLOW_CALL_RATE_THRESHOLD = 1; // The circuit breaker will open is over 1% of calls are slow
 
-    private final static Duration OPEN_WAIT_TIME_IN = Duration.ofSeconds(2);
+    private final static ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
 
     private final static Filter SERVICE = new Filter();
 
@@ -34,12 +41,12 @@ public class Communicator implements MqttCallback {
         middleware.setCallback(this);
 
         CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                .failureRateThreshold(10) //Failures over 10% will open the circuit breaker
-                .slidingWindow(2, 1, CircuitBreakerConfig.SlidingWindowType.COUNT_BASED) //Evaluates per 2 calls
-                .waitDurationInOpenState(OPEN_WAIT_TIME_IN)
-                .permittedNumberOfCallsInHalfOpenState(5)
-                .slowCallDurationThreshold(Duration.ofMillis(1)) // Calls with waiting time above 1 millisecond are considered a failure
-                .slowCallRateThreshold(1)	// Circuit breaker will open is over 1% of calls are slow
+                .failureRateThreshold(FAILURE_RATE_THRESHOLD)
+                .slidingWindow(SLIDING_WINDOW_SIZE, MINIMUM_CALLS, CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .waitDurationInOpenState(OPEN_WAIT_TIME)
+                .permittedNumberOfCallsInHalfOpenState(PERMITTED_CALLS)
+                .slowCallDurationThreshold(SLOW_CALL_DURATION_THRESHOLD)
+                .slowCallRateThreshold(SLOW_CALL_RATE_THRESHOLD)
                 .build();
 
         circuitBreaker = CircuitBreaker.of("availability", config);
@@ -91,9 +98,7 @@ public class Communicator implements MqttCallback {
 
             switch (topic) {
                 case "BookingRequest":
-                    System.out.println("State before makeReceivedBooking:" + circuitBreaker.getState());
                     SERVICE.makeReceivedBooking(incoming);
-                    System.out.println("State after SERVICE.makeReceivedBooking:" + circuitBreaker.getState());
                     receivedBooking = service.get(); // Could be a successful or failed booking
                     System.out.println("State after receivedBooking:" + circuitBreaker.getState());
                     if (!receivedBooking.getTime().equals("none")) {
@@ -101,7 +106,6 @@ public class Communicator implements MqttCallback {
                     } else {
                         dump("BookingResponse", receivedBooking.getBookingResponse()); // Time should be none
                     }
-                    System.out.println("State after makeReceivedBooking:" + circuitBreaker.getState());
                     break;
                 case "BookingRegistry":
                     SERVICE.makeBookingArray(incoming);
@@ -197,7 +201,7 @@ public class Communicator implements MqttCallback {
         MqttMessage outgoing = new MqttMessage();
         outgoing.setQos(1);
         outgoing.setPayload(msg.getBytes());
-        System.out.println(outgoing);
+        System.out.println("Message to be published: " + outgoing);
         middleware.publish(sinkTopic, outgoing);
         System.out.println("Message published!");
     }
