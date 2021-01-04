@@ -54,7 +54,7 @@ public class Dentist {
     }
 
     public void setDentistName(String dentistName) {
-    	Pattern p = Pattern.compile("[a-zA-Z0-9\\s]*");
+    	Pattern p = Pattern.compile("^[^!?(){}<>#;/%&$£@=+*]+$");
         Matcher m = p.matcher(dentistName);
         boolean b = m.matches();
         if (b == false) {
@@ -68,7 +68,7 @@ public class Dentist {
     }
 
     public void setOwner(String owner) {
-    	Pattern p = Pattern.compile("[a-zA-Z\\s]*");
+    	Pattern p = Pattern.compile("^[^!?(){}<>#;/%&$£@=+*]+$");
         Matcher m = p.matcher(owner);
         boolean b = m.matches();
         if (b == false) {
