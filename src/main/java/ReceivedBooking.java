@@ -22,6 +22,9 @@ public class ReceivedBooking {
         setRequestid(requestid);
         setTime(time);
     }
+
+    public ReceivedBooking() {
+    }
     
     public long getRequestid() {
         return requestid;
@@ -76,7 +79,7 @@ public class ReceivedBooking {
     }
 
     public void setTime(String time) {
-        if (timeIsValid(time)) {
+        if (timeIsValid(time) || time.equals("none")) {
             this.time = time;
         } else {
             throw new IllegalArgumentException("Time has to be in the format YYYY-MM-DD H:mm (15-16 characters long including spaces, dashes, and colons): " + time);
@@ -102,6 +105,14 @@ public class ReceivedBooking {
                 ",\n\"requestid\": " + requestid +
                 ",\n\"dentistid\": " + dentistid +
                 ",\n\"issuance\": " + issuance +
+                ",\n\"time\": \"" + time + "\"" +
+                "\n}\n";
+    }
+
+    public String getBookingResponse() {
+        return "\n{\n" +
+                "\"userid\": " + userid +
+                ",\n\"requestid\": " + requestid +
                 ",\n\"time\": \"" + time + "\"" +
                 "\n}\n";
     }
